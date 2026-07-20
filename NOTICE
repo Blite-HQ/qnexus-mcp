@@ -1,0 +1,10 @@
+qnexus-mcp
+Copyright 2026 The qnexus-mcp contributors
+
+This is an independent, community-built project. It is NOT affiliated with,
+endorsed by, or an official product of Quantinuum. "Quantinuum" and "Nexus"
+are trademarks of their respective owners, used here nominatively to describe
+compatibility.
+
+This project depends on the qnexus SDK (Apache-2.0, (c) Quantinuum),
+distributed separately via PyPI.
