@@ -1,0 +1,11 @@
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+version_scheme = "semver"
+version_files = [
+    "pyproject.toml:version",
+    "src/qnexus_mcp/__init__.py:__version__",
+]
+tag_format = "v$version"
+major_version_zero = true
+update_changelog_on_bump = true
