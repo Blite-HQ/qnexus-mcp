@@ -62,8 +62,18 @@ The first release is therefore manual — and the version files already say `0.1
    ```bash
    gh repo edit Blite-HQ/qnexus-mcp --visibility public --accept-visibility-change-consequences
    ```
-3. Cut the first release (above) → PyPI + registry.
-4. Announce to Quantathon participants: `uvx qnexus-mcp` plus the `mcpServers` snippet from the README.
+3. **Immediately** harden repo settings — GitHub blocks branch protection, secret scanning, and push
+   protection on a private repo under the Free plan (confirmed: 403 "Upgrade to GitHub Pro or make this
+   repository public"), so none of this can be pre-configured; it becomes available the instant the repo
+   flips. One script closes the gap:
+   ```bash
+   ./scripts/post-flip-harden.sh
+   ```
+   Enables secret scanning + push protection, Dependabot vulnerability alerts, and branch protection on
+   `main` (required CI status checks, no force-push, no deletion). Does not force a PR-only workflow —
+   tighten with required reviews once there are other contributors.
+4. Cut the first release (above) → PyPI + registry.
+5. Announce to Quantathon participants: `uvx qnexus-mcp` plus the `mcpServers` snippet from the README.
 
 ## Manual publish (fallback)
 
