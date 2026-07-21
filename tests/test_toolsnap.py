@@ -25,9 +25,7 @@ def _catalog(fake_client) -> list[dict]:
     )
     server = build_server(cfg, fake_client)
     tools = anyio.run(server.list_tools)
-    dumped = [
-        t.to_mcp_tool().model_dump(exclude_none=True, exclude={"meta"}) for t in tools
-    ]
+    dumped = [t.to_mcp_tool().model_dump(exclude_none=True, exclude={"meta"}) for t in tools]
     return sorted(dumped, key=lambda d: d["name"])
 
 
