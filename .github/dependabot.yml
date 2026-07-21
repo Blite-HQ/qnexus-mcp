@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # qnexus is capped per-minor on purpose (see pyproject.toml); Dependabot PRs propose the bump
+    # and CI + the live smoke validate it before the cap is raised.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
