@@ -76,14 +76,25 @@ class SpendGuard:
 
     def precheck(self, device: str) -> None:
         """Cheap flag-only gate. Called BEFORE any cost estimate so a denied device never even
-        enqueues the (free) estimation job. Raises SpendDenied, or returns for free devices."""
+        enqueues the (free) estimation job. Raises SpendDenied, or returns for free devices.
+
+        Reports every missing flag at once (not just the first) -- so restarting the server once
+        with the full set is enough, instead of discovering a second missing flag only after
+        fixing the first and retrying.
+        """
         if not is_billable(device):
             return
         c = self._config
+        missing = []
         if not c.allow_spend:
-            raise SpendDenied(f"{device} spends credits; start the server with --allow-spend")
+            missing.append("--allow-spend")
         if is_hardware(device) and not c.allow_hardware:
-            raise SpendDenied(f"{device} is real hardware; requires --allow-hardware")
+            missing.append("--allow-hardware")
+        if missing:
+            raise SpendDenied(
+                f"{device} requires the server to be restarted with: {', '.join(missing)}. "
+                "This cannot be enabled from a tool call."
+            )
 
     async def check_and_confirm(
         self,

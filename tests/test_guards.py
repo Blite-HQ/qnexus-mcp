@@ -45,6 +45,15 @@ async def test_hardware_needs_allow_hardware():
         await g.check_and_confirm(device="H2-1", estimated_cost=1.0, confirm=_yes)
 
 
+def test_hardware_precheck_reports_both_missing_flags_at_once():
+    # Restarting the server once with the full set beats discovering a second missing flag
+    # only after fixing the first and retrying (found via an independent-agent test).
+    g = SpendGuard(ServerConfig(toolsets=frozenset({"read", "execute"})))
+    with pytest.raises(SpendDenied, match="allow-spend") as exc:
+        g.precheck("H1-1")
+    assert "allow-hardware" in str(exc.value)
+
+
 def test_idempotency_key_is_stable():
     g = SpendGuard(ServerConfig())
     assert g.idempotency_key({"b": 2, "a": 1}) == g.idempotency_key({"a": 1, "b": 2})

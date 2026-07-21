@@ -18,13 +18,15 @@ General policy: every tool error already tells you what to do next (retry, wait,
 stop) — read it fully before deciding your next move. Do not retry the same call in a loop; a
 message that doesn't say "retry" means don't.
 
-Auth: if you are unsure whether the user is logged in, call `nexus_auth_status` FIRST, alone, and
-wait for its result before calling anything else that touches Nexus — don't fire it in parallel
-with other calls, since everything else will fail identically until it's resolved. If
-`logged_in` is false, tell the user to run `qnx login` in their own terminal (it opens their
-browser) and stop there. Never ask the user for their Nexus username or password, and never
-attempt to run `qnx login`/`qnx logout` yourself — this server never handles Nexus credentials,
-by design; login is a human-initiated, out-of-band step every time.
+Auth: at the start of any task that touches Nexus, call `nexus_auth_status` as your very first
+tool call — alone, before any other Nexus tool, even ones that feel like reasonable first steps
+(checking device status, estimating cost, listing resources). Wait for its result before doing
+anything else. This is unconditional: it costs nothing, and every other Nexus call fails
+identically until auth is resolved, so checking first is strictly better than finding out via a
+failed device/cost/list call. If `logged_in` is false, tell the user to run `qnx login` in their
+own terminal (it opens their browser) and stop there. Never ask the user for their Nexus username
+or password, and never attempt to run `qnx login`/`qnx logout` yourself — this server never
+handles Nexus credentials, by design; login is a human-initiated, out-of-band step every time.
 
 Guard errors (spend/hardware/destructive/project) split into two kinds — tell them apart:
   - Fixable by you, no human needed: a project rejected by --projects names the allowed set
