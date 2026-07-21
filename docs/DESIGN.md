@@ -245,7 +245,7 @@ qnexus-mcp/
   .cz.toml                     # Commitizen / Conventional Commits / SemVer, tag_format v$version
   .pre-commit-config.yaml
   .github/
-    workflows/{ci.yml,publish.yml}   # ci: ruff+mypy+pytest matrix 3.10–3.13 + pip-audit; publish: PyPI OIDC + registry
+    workflows/{ci.yml,publish.yml}   # ci: ruff+mypy+pytest matrix 3.10–3.13 + osv-scanner; publish: PyPI OIDC + registry
     ISSUE_TEMPLATE/…, PULL_REQUEST_TEMPLATE.md, dependabot.yml
   src/qnexus_mcp/
     __init__.py
