@@ -75,6 +75,25 @@ def _pytket_qasm() -> Any:
     return pytket.qasm
 
 
+def _parse_qasm(circuit: str) -> Any:
+    """Parse OpenQASM 2, translating any parse failure into an actionable ToolError.
+
+    circuit_from_qasm_str raises raw lark parser exceptions (UnexpectedToken,
+    UnexpectedCharacters, ...) on malformed input -- unmapped by _tool_error, so
+    mask_error_details previously turned a simple syntax typo into a bare "Error
+    calling tool" with zero detail (found live: an agent has no way to self-correct
+    from that). This is pure local parsing (no side effects), so a broad catch here
+    is safe and precise.
+    """
+    try:
+        return _pytket_qasm().circuit_from_qasm_str(circuit)
+    except Exception as exc:
+        raise ToolError(
+            f"Invalid OpenQASM 2 circuit: {str(exc)[:300]}. Fix the syntax and retry; "
+            "nothing was uploaded."
+        ) from None
+
+
 def _tool_error(exc: Exception) -> ToolError | None:
     """Map a qnexus/network exception to an actionable, safe ToolError (or None to re-raise)."""
     try:
@@ -284,7 +303,7 @@ class QnexusClient:
     # --- execute path (verified live at the M2.2 smoke) ---------------------------------------
 
     def _upload(self, qnx: Any, circuit: str, project: str | None) -> tuple[Any, Any]:
-        circ = _pytket_qasm().circuit_from_qasm_str(circuit)  # OpenQASM 2 (verified live)
+        circ = _parse_qasm(circuit)
         project_ref = qnx.projects.get_or_create(name=project or DEFAULT_PROJECT)
         circ_ref = qnx.circuits.upload(circuit=circ, name="qnexus-mcp-circuit", project=project_ref)
         return circ_ref, project_ref
@@ -386,7 +405,7 @@ class QnexusClient:
     def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]:
         qnx = _qnx()
         proj = qnx.projects.get_or_create(name=project)
-        circ = _pytket_qasm().circuit_from_qasm_str(circuit)
+        circ = _parse_qasm(circuit)
         ref = qnx.circuits.upload(circuit=circ, name=name, project=proj)
         out: dict[str, Any] = redact(
             {"name": name, "id": str(getattr(ref, "id", ref)), "project": project}

@@ -4,7 +4,7 @@ import types
 import pytest
 from fastmcp.exceptions import ToolError
 
-from qnexus_mcp.client import NexusClient, QnexusClient
+from qnexus_mcp.client import NexusClient, QnexusClient, _parse_qasm
 
 
 def test_fake_client_satisfies_protocol(fake_client):
@@ -47,6 +47,24 @@ def test_delete_project_requires_archived_first(monkeypatch):
     monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
     with pytest.raises(ToolError, match="Deletion requires the project to be archived first"):
         QnexusClient().delete_project(name="demo")
+
+
+def test_parse_qasm_rejects_malformed_circuit_with_actionable_message():
+    # Found live: a syntax typo previously escaped _tool_error's mapping entirely and
+    # surfaced as a bare "Error calling tool" with zero detail (mask_error_details
+    # swallowed the raw lark parser exception) -- an agent had nothing to self-correct
+    # from. "OPENQASM 3;" is missing the required decimal version (e.g. "3.0").
+    with pytest.raises(ToolError, match="Invalid OpenQASM 2 circuit"):
+        _parse_qasm("OPENQASM 3;")
+
+
+def test_parse_qasm_accepts_valid_circuit():
+    qasm = (
+        "OPENQASM 2.0;\n"
+        'include "qelib1.inc";\n'
+        "qreg q[1];\ncreg c[1];\nh q[0];\nmeasure q[0] -> c[0];\n"
+    )
+    assert _parse_qasm(qasm).n_qubits == 1
 
 
 def test_list_devices_strips_non_json_serializable_backend_info(monkeypatch):
