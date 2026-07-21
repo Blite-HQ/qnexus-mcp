@@ -8,18 +8,22 @@ billable devices. Billable calls are gated at runtime by SpendGuard: `--allow-sp
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import Context
+from pydantic import Field
 
 from ..backends import DEFAULT_DEVICE, is_billable
 from ..context import client_of, config_of, confirm_from_ctx
 from ..guards import SpendGuard
 from ..permissions import ToolSpec
 
+# Bound shot counts so an injected loop can't pile unbounded work onto the (free) queue.
+Shots = Annotated[int, Field(ge=1, le=100_000)]
+
 
 async def nexus_estimate_cost(
-    ctx: Context, circuit: str, n_shots: int = 100, device: str = DEFAULT_DEVICE
+    ctx: Context, circuit: str, n_shots: Shots = 100, device: str = DEFAULT_DEVICE
 ) -> dict[str, Any]:
     """Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job)."""
     cost = client_of(ctx).estimate_cost(circuit, n_shots, device)
@@ -36,7 +40,7 @@ async def nexus_compile(
 async def nexus_submit(
     ctx: Context,
     circuit: str,
-    n_shots: int = 100,
+    n_shots: Shots = 100,
     device: str = DEFAULT_DEVICE,
     project: str | None = None,
 ) -> dict[str, Any]:
@@ -52,7 +56,9 @@ async def nexus_submit(
     await guard.check_and_confirm(
         device=device, estimated_cost=estimated, confirm=confirm_from_ctx(ctx)
     )
-    key = guard.idempotency_key({"circuit": circuit, "n_shots": n_shots, "device": device})
+    key = guard.idempotency_key(
+        {"circuit": circuit, "n_shots": n_shots, "device": device, "project": project}
+    )
     return client.submit(
         circuit=circuit,
         n_shots=n_shots,
@@ -66,7 +72,7 @@ async def nexus_submit(
 async def nexus_submit_and_wait(
     ctx: Context,
     circuit: str,
-    n_shots: int = 100,
+    n_shots: Shots = 100,
     device: str = DEFAULT_DEVICE,
     project: str | None = None,
     timeout: float | None = None,
