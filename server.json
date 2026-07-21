@@ -1,0 +1,46 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Blite-HQ/qnexus-mcp",
+  "description": "A community MCP server for Quantinuum Nexus, wrapping the qnexus SDK. Not affiliated with Quantinuum.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Blite-HQ/qnexus-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "qnexus-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "runtimeHint": "uvx",
+      "environmentVariables": [
+        {
+          "name": "QNEXUS_MCP_TOOLSETS",
+          "description": "Comma-separated toolsets: read,execute,manage,destructive (default: read).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_ALLOW_SPEND",
+          "description": "Permit credit-spending (HQC) execution (default: false).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_ALLOW_HARDWARE",
+          "description": "Permit real-QPU targets (default: false).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_ALLOW_DESTRUCTIVE",
+          "description": "Permit delete/cancel/archive tools (default: false).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_MAX_CREDITS",
+          "description": "Hard per-call HQC ceiling; 0 blocks all spend (default: 0).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
