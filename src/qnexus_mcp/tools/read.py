@@ -40,11 +40,9 @@ async def nexus_get_quota(ctx: Context) -> list[dict[str, Any]]:
     return client_of(ctx).get_quota()
 
 
-async def nexus_list_jobs(
-    ctx: Context, project: str | None = None, status: str | None = None
-) -> list[dict[str, Any]]:
-    """List jobs, optionally filtered by project and/or status."""
-    return client_of(ctx).list_jobs(project=project, status=status)
+async def nexus_list_jobs(ctx: Context) -> list[dict[str, Any]]:
+    """List jobs visible to the user."""
+    return client_of(ctx).list_jobs()
 
 
 async def nexus_job_status(ctx: Context, job_id: str) -> dict[str, Any]:

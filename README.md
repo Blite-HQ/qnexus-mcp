@@ -64,7 +64,6 @@ To also allow running circuits (defaults to the free `H2-1LE` emulator):
 | `--allow-hardware` | `QNEXUS_MCP_ALLOW_HARDWARE` | `false` | Permit real-QPU targets |
 | `--allow-destructive` | `QNEXUS_MCP_ALLOW_DESTRUCTIVE` | `false` | Permit delete/cancel/archive |
 | `--max-credits` | `QNEXUS_MCP_MAX_CREDITS` | `0` | Hard per-call HQC ceiling; `0` blocks all spend |
-| `--projects` | `QNEXUS_MCP_PROJECTS` | *(all)* | Deny-by-default project allowlist |
 
 ## Safety
 

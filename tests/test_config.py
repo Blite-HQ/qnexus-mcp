@@ -33,3 +33,18 @@ def test_env_is_fallback_when_flag_absent():
 def test_cli_overrides_env():
     c = config_from_sources(["--toolsets", "read"], env={"QNEXUS_MCP_TOOLSETS": "read,execute"})
     assert c.toolsets == frozenset({"read"})
+
+
+def test_read_is_forced_on_even_if_excluded():
+    c = config_from_sources(["--toolsets", "execute"], env={})
+    assert "read" in c.toolsets and "execute" in c.toolsets
+
+
+def test_bad_max_credits_env_raises():
+    with pytest.raises(ValueError, match="must be a number"):
+        config_from_sources([], env={"QNEXUS_MCP_MAX_CREDITS": "abc"})
+
+
+def test_negative_max_credits_rejected():
+    with pytest.raises(ValidationError):
+        ServerConfig(max_credits=-1.0)
