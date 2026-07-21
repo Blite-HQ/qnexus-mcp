@@ -1,4 +1,9 @@
+import types
+
 import pytest
+
+from qnexus_mcp.config import ServerConfig
+from qnexus_mcp.context import bind_state
 
 
 class FakeClient:
@@ -41,3 +46,15 @@ class FakeClient:
 @pytest.fixture
 def fake_client():
     return FakeClient()
+
+
+@pytest.fixture
+def make_ctx():
+    """Factory: build a minimal Context-like object carrying bound server state."""
+
+    def _make(client, config=None):
+        server = types.SimpleNamespace()
+        bind_state(server, client, config or ServerConfig())
+        return types.SimpleNamespace(fastmcp=server)
+
+    return _make
