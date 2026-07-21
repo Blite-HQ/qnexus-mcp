@@ -1,16 +1,32 @@
 """Thin, injectable wrapper over qnexus. NEVER reads, stores, or returns the auth token.
 
 The `NexusClient` Protocol is what tools depend on; `QnexusClient` is the real implementation and
-`FakeClient` (tests/conftest.py) is the offline stand-in. Signatures follow
-docs/research/04-qnexus-sdk-surface.md; items marked VERIFY LIVE are confirmed against the installed
-SDK by the M1.9 live smoke test (which needs `qnx login`).
+`FakeClient` (tests/conftest.py) is the offline stand-in. Read and execute signatures are verified
+against live Nexus (2026-07-21, Bell state on H2-1LE); the remaining surface is verified against the
+installed qnexus 0.46 source.
+
+Every public `QnexusClient` method is wrapped by `@_mapped`, which translates SDK and network
+failures into short, actionable, secret-redacted `ToolError` messages (see `_tool_error`). Raw
+exceptions never reach the agent: FastMCP masks them into an unactionable generic error.
 """
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+import base64
+import binascii
+import functools
+from collections.abc import Callable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
+from fastmcp.exceptions import ToolError
+
+from .backends import is_hardware
+from .config import DEFAULT_PROJECT
 from .sanitize import redact
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+_MAX_PROGRAM_BYTES = 5 * 1024 * 1024  # cap uploaded QIR programs at 5 MiB
 
 
 @runtime_checkable
@@ -18,8 +34,10 @@ class NexusClient(Protocol):
     def auth_status(self) -> dict[str, Any]: ...
     def whoami(self) -> dict[str, Any]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
+    def device_status(self, device: str) -> dict[str, Any]: ...
     def list_projects(self) -> list[dict[str, Any]]: ...
     def get_quota(self) -> list[dict[str, Any]]: ...
+    def check_quota(self, name: str) -> bool: ...
     def list_jobs(self) -> list[dict[str, Any]]: ...
     def job_status(self, job_id: str) -> dict[str, Any]: ...
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
@@ -38,6 +56,7 @@ class NexusClient(Protocol):
     def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]: ...
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]: ...
     def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]: ...
+    def upload_program(self, program_base64: str, project: str, name: str) -> dict[str, Any]: ...
     def cancel_job(self, job_id: str) -> dict[str, Any]: ...
     def delete_job(self, job_id: str) -> dict[str, Any]: ...
     def archive_project(self, name: str) -> dict[str, Any]: ...
@@ -54,6 +73,81 @@ def _pytket_qasm() -> Any:
     import pytket.qasm
 
     return pytket.qasm
+
+
+def _tool_error(exc: Exception) -> ToolError | None:
+    """Map a qnexus/network exception to an actionable, safe ToolError (or None to re-raise)."""
+    try:
+        import qnexus.exceptions as qnx_exc
+    except ImportError:  # pragma: no cover - qnexus is a hard dependency
+        return None
+    import httpx
+
+    def detail(e: Exception) -> str:
+        return str(redact(str(e)))[:300]
+
+    if isinstance(exc, qnx_exc.AuthenticationError):
+        return ToolError(
+            "Not authenticated with Nexus (or the session expired). "
+            "Run `qnx login` in a terminal, then retry."
+        )
+    if isinstance(exc, qnx_exc.ZeroMatches):
+        return ToolError(
+            "No Nexus resource matches that exact name. "
+            "Check the name with nexus_list_projects / nexus_list_jobs; nothing was changed."
+        )
+    if isinstance(exc, qnx_exc.NoUniqueMatch):
+        return ToolError(
+            "More than one Nexus resource matches; refusing to act on an ambiguous target. "
+            "Nothing was changed."
+        )
+    if isinstance(exc, qnx_exc.JobError):
+        return ToolError(f"Nexus job failed: {detail(exc)}")
+    if isinstance(
+        exc,
+        (
+            qnx_exc.ResourceFetchFailed,
+            qnx_exc.ResourceCreateFailed,
+            qnx_exc.ResourceDeleteFailed,
+            qnx_exc.ResourceUpdateFailed,
+        ),
+    ):
+        status = getattr(exc, "status_code", None)
+        if isinstance(status, int) and status >= 500:
+            return ToolError(
+                f"Nexus returned a server error ({status}). This is a Nexus-side issue, not a "
+                "problem with your request — do not retry in a loop; try again later. "
+                "Other endpoints (e.g. job status by id) may still work."
+            )
+        return ToolError(f"Nexus rejected the request (HTTP {status}): {detail(exc)}")
+    if isinstance(exc, httpx.TimeoutException):
+        return ToolError(
+            "The request to Nexus timed out. The service may be slow or unreachable — "
+            "retry once; if it persists, stop and report the outage to the user."
+        )
+    if isinstance(exc, httpx.HTTPError):
+        return ToolError(
+            "Could not reach the Nexus API (network error). Check connectivity, then retry once."
+        )
+    return None
+
+
+def _mapped(fn: _F) -> _F:
+    """Translate SDK/network exceptions raised by a client method into ToolErrors."""
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except ToolError:
+            raise
+        except Exception as exc:
+            mapped = _tool_error(exc)
+            if mapped is not None:
+                raise mapped from exc
+            raise
+
+    return wrapper  # type: ignore[return-value]
 
 
 def _bitstrings(counts: Any) -> dict[str, int]:
@@ -74,31 +168,65 @@ def _records(dataframable: Any) -> list[dict[str, Any]]:
 
 
 class QnexusClient:
-    """Real implementation over the qnexus SDK (read + execute paths verified live 2026-07-21)."""
+    """Real implementation over the qnexus SDK (read + execute paths verified live 2026-07-21).
 
+    All methods are synchronous and blocking (the SDK is sync httpx; `jobs.wait_for` even runs its
+    own `asyncio.run`). Tools MUST call them through `context.call_sync`, never directly from the
+    event loop.
+    """
+
+    @_mapped
     def auth_status(self) -> dict[str, Any]:
         qnx = _qnx()
         logged_in = bool(qnx.auth.is_logged_in())
         return {"logged_in": logged_in, "hint": None if logged_in else "run: qnx login"}
 
+    @_mapped
     def whoami(self) -> dict[str, Any]:
-        records = _records(_qnx().users.get_self())  # VERIFY LIVE: get_self df shape
+        records = _records(_qnx().users.get_self())
         return records[0] if records else {}
 
+    @_mapped
     def list_devices(self) -> list[dict[str, Any]]:
         return _records(_qnx().devices.get_all())
 
+    @_mapped
+    def device_status(self, device: str) -> dict[str, Any]:
+        # The SDK only reports status for hardware-hosted devices; it documents cloud-hosted
+        # emulators/syntax checkers as "always online" and rejects them, so we answer directly.
+        if not is_hardware(device):
+            return {
+                "device": device,
+                "state": "online",
+                "note": "emulators and syntax checkers are cloud-hosted and always available",
+            }
+        qnx = _qnx()
+        state = qnx.devices.status(qnx.QuantinuumConfig(device_name=device))
+        out: dict[str, Any] = redact(
+            {"device": device, "state": str(getattr(state, "value", state))}
+        )
+        return out
+
+    @_mapped
     def list_projects(self) -> list[dict[str, Any]]:
         return _records(_qnx().projects.get_all())
 
+    @_mapped
     def get_quota(self) -> list[dict[str, Any]]:
         return _records(_qnx().quotas.get_all())
 
+    @_mapped
+    def check_quota(self, name: str) -> bool:
+        return bool(_qnx().quotas.check_quota(name))
+
+    @_mapped
     def list_jobs(self) -> list[dict[str, Any]]:
         # NOTE: jobs.get_all() (the LIST endpoint) was observed returning 500 / server-side
         # timeouts on the event account (2026-07-21). submit/status/results-by-id are unaffected.
+        # _tool_error turns that 500 into a clear "Nexus-side issue, don't retry-loop" message.
         return _records(_qnx().jobs.get_all())
 
+    @_mapped
     def job_status(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         st = qnx.jobs.status(qnx.jobs.get(id=job_id))
@@ -112,32 +240,42 @@ class QnexusClient:
         )
         return out
 
+    @_mapped
     def job_cost(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         job = qnx.jobs.get(id=job_id)
         out: dict[str, Any] = redact({"id": job_id, "hqc_cost": qnx.jobs.cost(job)})
         return out
 
+    @_mapped
     def get_results(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        result = qnx.jobs.results(qnx.jobs.get(id=job_id))[0].download_result()
+        refs = qnx.jobs.results(qnx.jobs.get(id=job_id))
+        if not refs:
+            raise ToolError(
+                f"Job {job_id} has no results yet. Check nexus_job_status; only COMPLETED jobs "
+                "have results."
+            )
+        result = refs[0].download_result()
         out: dict[str, Any] = redact({"id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
 
-    # --- execute path (all VERIFY LIVE against the real SDK at M2.2 smoke) -------------------
+    # --- execute path (verified live at the M2.2 smoke) ---------------------------------------
 
     def _upload(self, qnx: Any, circuit: str, project: str | None) -> tuple[Any, Any]:
         circ = _pytket_qasm().circuit_from_qasm_str(circuit)  # OpenQASM 2 (verified live)
-        project_ref = qnx.projects.get_or_create(name=project or "qnexus-mcp")
+        project_ref = qnx.projects.get_or_create(name=project or DEFAULT_PROJECT)
         circ_ref = qnx.circuits.upload(circuit=circ, name="qnexus-mcp-circuit", project=project_ref)
         return circ_ref, project_ref
 
+    @_mapped
     def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float:
         qnx = _qnx()
         circ_ref, _ = self._upload(qnx, circuit, None)
         cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
         return float(cost or 0.0)
 
+    @_mapped
     def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]:
         qnx = _qnx()
         circ_ref, project_ref = self._upload(qnx, circuit, project)
@@ -151,6 +289,7 @@ class QnexusClient:
         out: dict[str, Any] = redact({"device": device, "compiled": compiled_id})
         return out
 
+    @_mapped
     def submit(
         self,
         circuit: str,
@@ -182,22 +321,40 @@ class QnexusClient:
         out: dict[str, Any] = redact({"job_id": str(job.id), "device": device})
         return out
 
+    @_mapped
     def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]:
+        import asyncio
+
         qnx = _qnx()
         job = qnx.jobs.get(id=job_id)
-        qnx.jobs.wait_for(job, timeout=timeout)
-        result = qnx.jobs.results(job)[0].download_result()
+        try:
+            # SDK default HybridStrategy: websocket first, exponential-backoff polling fallback.
+            qnx.jobs.wait_for(job, timeout=timeout)
+        except (TimeoutError, asyncio.TimeoutError):
+            raise ToolError(
+                f"Timed out after {timeout}s waiting for job {job_id}. The job is still running "
+                "on Nexus — do not resubmit; poll nexus_job_status and fetch nexus_get_results "
+                "when it is COMPLETED."
+            ) from None
+        refs = qnx.jobs.results(job)
+        if not refs:
+            raise ToolError(
+                f"Job {job_id} finished but returned no results. Check nexus_job_status."
+            )
+        result = refs[0].download_result()
         out: dict[str, Any] = redact({"job_id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
 
     # --- manage (opt-in via --toolsets manage) ------------------------------------------------
 
+    @_mapped
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]:
         qnx = _qnx()
         proj = qnx.projects.get_or_create(name=name, description=description)
         out: dict[str, Any] = redact({"name": name, "id": str(getattr(proj, "id", proj))})
         return out
 
+    @_mapped
     def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]:
         qnx = _qnx()
         proj = qnx.projects.get_or_create(name=project)
@@ -208,32 +365,64 @@ class QnexusClient:
         )
         return out
 
-    # --- destructive (opt-in via --toolsets destructive + --allow-destructive) ----------------
-    # VERIFY LIVE WITH CARE: these delete/cancel real resources; NOT exercised by the live smoke.
-    # projects.get(name_like=) must be confirmed to resolve exactly one project before enabling.
+    @_mapped
+    def upload_program(self, program_base64: str, project: str, name: str) -> dict[str, Any]:
+        try:
+            data = base64.b64decode(program_base64, validate=True)
+        except (binascii.Error, ValueError):
+            raise ToolError("program_base64 is not valid base64. Nothing was uploaded.") from None
+        if len(data) > _MAX_PROGRAM_BYTES:
+            raise ToolError(
+                f"Program exceeds the {_MAX_PROGRAM_BYTES // (1024 * 1024)} MiB upload cap. "
+                "Nothing was uploaded."
+            )
+        qnx = _qnx()
+        proj = qnx.projects.get_or_create(name=project)
+        ref = qnx.qir.upload(qir=data, name=name, project=proj)
+        out: dict[str, Any] = redact(
+            {"name": name, "id": str(getattr(ref, "id", ref)), "project": project}
+        )
+        return out
 
+    # --- destructive (opt-in via --toolsets destructive + --allow-destructive) ----------------
+    # Project targets resolve via projects.get(name=...) — the SDK's EXACT-match filter
+    # (name_exact server-side) which raises ZeroMatches / NoUniqueMatch instead of guessing.
+    # Never use name_like (substring) here: it could resolve the wrong project.
+
+    @_mapped
     def cancel_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         qnx.jobs.cancel(qnx.jobs.get(id=job_id))
         out: dict[str, Any] = redact({"job_id": job_id, "cancelled": True})
         return out
 
+    @_mapped
     def delete_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         qnx.jobs.delete(qnx.jobs.get(id=job_id))
         out: dict[str, Any] = redact({"job_id": job_id, "deleted": True})
         return out
 
+    @_mapped
     def archive_project(self, name: str) -> dict[str, Any]:
         qnx = _qnx()
-        proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
+        proj = qnx.projects.get(name=name)  # exact match; raises on 0 or >1 matches
         qnx.projects.update(proj, archive=True)
         out: dict[str, Any] = redact({"name": name, "archived": True})
         return out
 
+    @_mapped
     def delete_project(self, name: str) -> dict[str, Any]:
+        import qnexus.exceptions as qnx_exc
+
         qnx = _qnx()
-        proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
+        try:
+            proj = qnx.projects.get(name=name, is_archived=True)  # exact match; must be archived
+        except qnx_exc.ZeroMatches:
+            raise ToolError(
+                f"No archived project is named exactly '{name}'. Deletion requires the project "
+                "to be archived first (nexus_archive_project). Nothing was deleted."
+            ) from None
         qnx.projects.delete(proj)
         out: dict[str, Any] = redact({"name": name, "deleted": True})
         return out

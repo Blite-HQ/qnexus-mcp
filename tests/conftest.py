@@ -9,8 +9,9 @@ from qnexus_mcp.context import bind_state
 class FakeClient:
     """In-memory stand-in for the Nexus client, so tools/guards are testable offline."""
 
-    def __init__(self, logged_in: bool = True) -> None:
+    def __init__(self, logged_in: bool = True, quota_ok: bool = True) -> None:
         self._logged_in = logged_in
+        self._quota_ok = quota_ok
 
     def auth_status(self):
         return {
@@ -24,11 +25,17 @@ class FakeClient:
     def list_devices(self):
         return [{"name": "H2-1LE", "status": "online", "billable": False}]
 
+    def device_status(self, device):
+        return {"device": device, "state": "online"}
+
     def list_projects(self):
         return [{"id": "p1", "name": "demo"}]
 
     def get_quota(self):
         return [{"name": "simulation", "used": 0, "limit": 100}]
+
+    def check_quota(self, name):
+        return self._quota_ok
 
     def list_jobs(self):
         return [{"id": "j1", "status": "COMPLETED"}]
@@ -59,6 +66,9 @@ class FakeClient:
 
     def upload_circuit(self, circuit, project, name):
         return {"name": name, "id": "circ-new", "project": project}
+
+    def upload_program(self, program_base64, project, name):
+        return {"name": name, "id": "qir-new", "project": project}
 
     def cancel_job(self, job_id):
         return {"job_id": job_id, "cancelled": True}
