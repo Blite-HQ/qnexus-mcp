@@ -8,7 +8,6 @@ wrapping the official [`qnexus`](https://github.com/Quantinuum/qnexus) Python SD
 > trademarks of their respective owners, used here nominatively to describe compatibility.
 
 <!-- mcp-name: io.github.Blite-HQ/qnexus-mcp -->
-<!-- The registry namespace is confirmed against `mcp-publisher login github` at publish time (M4). -->
 
 ## Status
 
@@ -64,13 +63,16 @@ To also allow running circuits (defaults to the free `H2-1LE` emulator):
 | `--allow-hardware` | `QNEXUS_MCP_ALLOW_HARDWARE` | `false` | Permit real-QPU targets |
 | `--allow-destructive` | `QNEXUS_MCP_ALLOW_DESTRUCTIVE` | `false` | Permit delete/cancel/archive |
 | `--max-credits` | `QNEXUS_MCP_MAX_CREDITS` | `0` | Hard per-call HQC ceiling; `0` blocks all spend |
+| `--projects` | `QNEXUS_MCP_PROJECTS` | *(all)* | Comma-separated project allowlist, enforced on every mutating tool |
 
 ## Safety
 
 Read-only by default. Anything that spends credits or mutates cloud state requires an explicit opt-in flag
 **and** an in-protocol confirmation, and the default execution backend is the free, noiseless `H2-1LE`
-emulator. Every control is enforced server-side; MCP tool annotations are treated as UX hints only. See
-[`docs/DESIGN.md`](docs/DESIGN.md) §6–§7.
+emulator. Submissions are rate-limited, cloud mutations are serialized, destructive project operations
+resolve their target by **exact** name (never substring), and the server never reads, stores, or returns
+your Nexus token. Every control is enforced server-side; MCP tool annotations are treated as UX hints
+only. See [`docs/DESIGN.md`](docs/DESIGN.md) §6–§7.
 
 ## Contributing
 
