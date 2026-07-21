@@ -188,7 +188,28 @@ class QnexusClient:
 
     @_mapped
     def list_devices(self) -> list[dict[str, Any]]:
-        return _records(_qnx().devices.get_all())
+        # devices.get_all() rows carry a raw pytket BackendInfo (architecture graph,
+        # OpType gate-set) that pydantic can't serialize to JSON — that silently drops
+        # MCP structured_content, which a strict client then rejects as a schema
+        # violation (found live: nexus_list_devices via a real stdio MCP round-trip).
+        # Surface only the plain, agent-useful fields instead of the raw SDK object.
+        rows = _qnx().devices.get_all().df().to_dict(orient="records")
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            info = row.get("backend_info")
+            architecture = getattr(info, "architecture", None)
+            nodes = getattr(architecture, "nodes", None)
+            out.append(
+                redact(
+                    {
+                        "backend_name": row.get("backend_name"),
+                        "device_name": row.get("device_name"),
+                        "nexus_hosted": row.get("nexus_hosted"),
+                        "n_qubits": len(nodes) if nodes is not None else None,
+                    }
+                )
+            )
+        return out
 
     @_mapped
     def device_status(self, device: str) -> dict[str, Any]:

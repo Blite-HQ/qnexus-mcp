@@ -1,4 +1,5 @@
 import base64
+import types
 
 import pytest
 from fastmcp.exceptions import ToolError
@@ -46,6 +47,43 @@ def test_delete_project_requires_archived_first(monkeypatch):
     monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
     with pytest.raises(ToolError, match="Deletion requires the project to be archived first"):
         QnexusClient().delete_project(name="demo")
+
+
+def test_list_devices_strips_non_json_serializable_backend_info(monkeypatch):
+    import json
+
+    class _UnserializableBackendInfo:
+        """Stands in for pytket's real BackendInfo (an architecture graph + OpType
+        gate-set) which has no JSON representation and previously broke MCP
+        structured output (found live via a real stdio client round-trip)."""
+
+        architecture = types.SimpleNamespace(nodes=[object()] * 5)
+
+    class _FakeDataframe:
+        def to_dict(self, orient):
+            return [
+                {
+                    "backend_name": "H2",
+                    "device_name": "H2-1LE",
+                    "nexus_hosted": True,
+                    "backend_info": _UnserializableBackendInfo(),
+                }
+            ]
+
+    class _FakeDevices:
+        @staticmethod
+        def get_all():
+            return types.SimpleNamespace(df=lambda: _FakeDataframe())
+
+    class _FakeQnx:
+        devices = _FakeDevices()
+
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
+    rows = QnexusClient().list_devices()
+    assert rows == [
+        {"backend_name": "H2", "device_name": "H2-1LE", "nexus_hosted": True, "n_qubits": 5}
+    ]
+    json.dumps(rows)  # must not raise: this is exactly what MCP structured_content needs
 
 
 def test_wait_and_results_timeout_gives_actionable_message(monkeypatch):
