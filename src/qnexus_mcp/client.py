@@ -36,6 +36,12 @@ class NexusClient(Protocol):
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
     def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]: ...
+    def create_project(self, name: str, description: str | None = None) -> dict[str, Any]: ...
+    def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]: ...
+    def cancel_job(self, job_id: str) -> dict[str, Any]: ...
+    def delete_job(self, job_id: str) -> dict[str, Any]: ...
+    def archive_project(self, name: str) -> dict[str, Any]: ...
+    def delete_project(self, name: str) -> dict[str, Any]: ...
 
 
 def _qnx() -> Any:
@@ -182,3 +188,47 @@ class QnexusClient:
         result = qnx.jobs.results(job)[0].download_result()
         out: dict[str, Any] = redact({"job_id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
+
+    # --- manage (opt-in via --toolsets manage) ------------------------------------------------
+
+    def create_project(self, name: str, description: str | None = None) -> dict[str, Any]:
+        qnx = _qnx()
+        proj = qnx.projects.get_or_create(name=name, description=description)
+        out: dict[str, Any] = redact({"name": name, "id": str(getattr(proj, "id", proj))})
+        return out
+
+    def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]:
+        qnx = _qnx()
+        proj = qnx.projects.get_or_create(name=project)
+        circ = _pytket_qasm().circuit_from_qasm_str(circuit)
+        ref = qnx.circuits.upload(circuit=circ, name=name, project=proj)
+        out: dict[str, Any] = redact(
+            {"name": name, "id": str(getattr(ref, "id", ref)), "project": project}
+        )
+        return out
+
+    # --- destructive (opt-in via --toolsets destructive + --allow-destructive) ----------------
+    # VERIFY LIVE WITH CARE: these delete/cancel real resources; NOT exercised by the live smoke.
+    # projects.get(name_like=) must be confirmed to resolve exactly one project before enabling.
+
+    def cancel_job(self, job_id: str) -> dict[str, Any]:
+        qnx = _qnx()
+        qnx.jobs.cancel(qnx.jobs.get(id=job_id))
+        return {"job_id": job_id, "cancelled": True}
+
+    def delete_job(self, job_id: str) -> dict[str, Any]:
+        qnx = _qnx()
+        qnx.jobs.delete(qnx.jobs.get(id=job_id))
+        return {"job_id": job_id, "deleted": True}
+
+    def archive_project(self, name: str) -> dict[str, Any]:
+        qnx = _qnx()
+        proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
+        qnx.projects.update(proj, archive=True)
+        return {"name": name, "archived": True}
+
+    def delete_project(self, name: str) -> dict[str, Any]:
+        qnx = _qnx()
+        proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
+        qnx.projects.delete(proj)
+        return {"name": name, "deleted": True}
