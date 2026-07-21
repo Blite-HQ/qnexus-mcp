@@ -15,7 +15,7 @@ from .tools import ALL_SPECS
 
 
 def build_server(config: ServerConfig, client: NexusClient) -> FastMCP:
-    server = FastMCP("qnexus-mcp")
+    server = FastMCP("qnexus-mcp", mask_error_details=True)
     bind_state(server, client, config)
     for spec in select_tools(ALL_SPECS, config):
         a = annotations_for(spec)

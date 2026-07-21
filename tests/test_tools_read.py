@@ -22,6 +22,6 @@ async def test_list_devices_returns_client_data(fake_client, make_ctx):
     assert out == [{"name": "H2-1LE", "status": "online", "billable": False}]
 
 
-async def test_list_jobs_passes_filters(fake_client, make_ctx):
-    out = await nexus_list_jobs(make_ctx(fake_client), project="p1")
+async def test_list_jobs_returns_client_data(fake_client, make_ctx):
+    out = await nexus_list_jobs(make_ctx(fake_client))
     assert out == [{"id": "j1", "status": "COMPLETED"}]

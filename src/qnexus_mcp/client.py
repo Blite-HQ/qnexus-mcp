@@ -20,9 +20,7 @@ class NexusClient(Protocol):
     def list_devices(self) -> list[dict[str, Any]]: ...
     def list_projects(self) -> list[dict[str, Any]]: ...
     def get_quota(self) -> list[dict[str, Any]]: ...
-    def list_jobs(
-        self, project: str | None = None, status: str | None = None
-    ) -> list[dict[str, Any]]: ...
+    def list_jobs(self) -> list[dict[str, Any]]: ...
     def job_status(self, job_id: str) -> dict[str, Any]: ...
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
     def get_results(self, job_id: str) -> dict[str, Any]: ...
@@ -63,22 +61,19 @@ class QnexusClient:
     def get_quota(self) -> list[dict[str, Any]]:
         return _records(_qnx().quotas.get_all())
 
-    def list_jobs(
-        self, project: str | None = None, status: str | None = None
-    ) -> list[dict[str, Any]]:
-        # VERIFY LIVE: exact jobs.get_all filter kwargs for project/status.
+    def list_jobs(self) -> list[dict[str, Any]]:
         return _records(_qnx().jobs.get_all())
 
     def job_status(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         job = qnx.jobs.get(id=job_id)  # VERIFY LIVE: get-by-id kwarg
-        out: dict[str, Any] = {"id": job_id, "status": str(qnx.jobs.status(job))}
+        out: dict[str, Any] = redact({"id": job_id, "status": str(qnx.jobs.status(job))})
         return out
 
     def job_cost(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         job = qnx.jobs.get(id=job_id)
-        out: dict[str, Any] = {"id": job_id, "hqc_cost": qnx.jobs.cost(job)}
+        out: dict[str, Any] = redact({"id": job_id, "hqc_cost": qnx.jobs.cost(job)})
         return out
 
     def get_results(self, job_id: str) -> dict[str, Any]:
@@ -86,5 +81,5 @@ class QnexusClient:
         job = qnx.jobs.get(id=job_id)
         result = qnx.jobs.results(job)[0].download_result()  # VERIFY LIVE signatures
         counts = {str(k): int(v) for k, v in result.get_counts().items()}
-        out: dict[str, Any] = {"id": job_id, "counts": counts}
+        out: dict[str, Any] = redact({"id": job_id, "counts": counts})
         return out

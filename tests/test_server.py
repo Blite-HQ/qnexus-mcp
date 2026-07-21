@@ -13,3 +13,9 @@ def test_enabling_execute_toolset_is_accepted(fake_client):
     cfg = ServerConfig(toolsets=frozenset({"read", "execute"}))
     names = registered_tool_names(build_server(cfg, fake_client))
     assert "nexus_list_devices" in names
+
+
+def test_server_masks_error_details(fake_client):
+    # qnexus/httpx exceptions must not reach the LLM verbatim (DESIGN §7/§9).
+    server = build_server(ServerConfig(), fake_client)
+    assert server._mask_error_details is True

@@ -30,7 +30,7 @@ class FakeClient:
     def get_quota(self):
         return [{"name": "simulation", "used": 0, "limit": 100}]
 
-    def list_jobs(self, project=None, status=None):
+    def list_jobs(self):
         return [{"id": "j1", "status": "COMPLETED"}]
 
     def job_status(self, job_id):
