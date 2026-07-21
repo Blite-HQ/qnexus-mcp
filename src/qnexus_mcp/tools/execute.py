@@ -8,6 +8,7 @@ in-protocol `ctx.elicit` confirmation. All submissions are rate-limited and seri
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -36,7 +37,10 @@ DEFAULT_WAIT_TIMEOUT = 300.0
 async def nexus_estimate_cost(
     ctx: Context, circuit: str, n_shots: Shots = 100, device: str = DEFAULT_DEVICE
 ) -> dict[str, Any]:
-    """Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job)."""
+    """Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).
+
+    Defaults to the free H2-1LE emulator, which always estimates 0 HQC.
+    """
     check_project_allowed(config_of(ctx), None)
     cost = await call_sync(client_of(ctx).estimate_cost, circuit, n_shots, device)
     return {"device": device, "n_shots": n_shots, "estimated_hqc": cost}
@@ -45,7 +49,10 @@ async def nexus_estimate_cost(
 async def nexus_compile(
     ctx: Context, circuit: str, device: str = DEFAULT_DEVICE, project: str | None = None
 ) -> dict[str, Any]:
-    """Compile a QASM circuit to a backend's native gate set."""
+    """Compile a QASM circuit to a backend's native gate set.
+
+    Defaults to the free H2-1LE emulator.
+    """
     check_project_allowed(config_of(ctx), project)
     async with mutation_lock_of(ctx):
         return await call_sync(client_of(ctx).compile, circuit, device, project)
@@ -125,7 +132,7 @@ def _spec(fn: Callable[..., Any], is_spend: bool = False) -> ToolSpec:
         read_only=False,
         idempotent=False,
         is_spend=is_spend,
-        description=(fn.__doc__ or "").strip().splitlines()[0],
+        description=inspect.cleandoc(fn.__doc__ or ""),
     )
 
 

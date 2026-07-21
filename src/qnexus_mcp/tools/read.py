@@ -7,6 +7,7 @@ thread via `call_sync`.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -47,7 +48,11 @@ async def nexus_get_quota(ctx: Context) -> list[dict[str, Any]]:
 
 
 async def nexus_list_jobs(ctx: Context) -> list[dict[str, Any]]:
-    """List jobs visible to the user."""
+    """List jobs visible to the user.
+
+    Occasionally returns a Nexus-side server error unrelated to your request; if so, use
+    nexus_job_status / nexus_get_results by id instead of retrying this call.
+    """
     return await call_sync(client_of(ctx).list_jobs)
 
 
@@ -73,7 +78,7 @@ def _spec(fn: Callable[..., Any], idempotent: bool = True) -> ToolSpec:
         handler=fn,
         read_only=True,
         idempotent=idempotent,
-        description=(fn.__doc__ or "").strip(),
+        description=inspect.cleandoc(fn.__doc__ or ""),
     )
 
 

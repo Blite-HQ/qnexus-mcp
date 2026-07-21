@@ -77,7 +77,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Compile a QASM circuit to a backend's native gate set.",
+    "description": "Compile a QASM circuit to a backend's native gate set.\n\nDefaults to the free H2-1LE emulator.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -233,7 +233,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).",
+    "description": "Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).\n\nDefaults to the free H2-1LE emulator, which always estimates 0 HQC.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -409,7 +409,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "List jobs visible to the user.",
+    "description": "List jobs visible to the user.\n\nOccasionally returns a Nexus-side server error unrelated to your request; if so, use\nnexus_job_status / nexus_get_results by id instead of retrying this call.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -471,7 +471,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Submit a QASM circuit for execution.",
+    "description": "Submit a QASM circuit for execution.\n\nDefaults to the free H2-1LE emulator. Billable devices require --allow-spend (and, for real\nhardware, --allow-hardware), stay under --max-credits, and prompt for an explicit confirmation.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -518,7 +518,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Submit a QASM circuit and return its results. Defaults to the free H2-1LE emulator.",
+    "description": "Submit a QASM circuit and return its results. Defaults to the free H2-1LE emulator.\n\nWaits up to `timeout` seconds (default 300, max 3600); on timeout the job keeps running and\ncan be polled with nexus_job_status / nexus_get_results.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

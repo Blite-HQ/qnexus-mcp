@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -46,7 +47,7 @@ def _spec(fn: Callable[..., Any]) -> ToolSpec:
         handler=fn,
         read_only=False,
         idempotent=False,
-        description=(fn.__doc__ or "").strip().splitlines()[0],
+        description=inspect.cleandoc(fn.__doc__ or ""),
     )
 
 

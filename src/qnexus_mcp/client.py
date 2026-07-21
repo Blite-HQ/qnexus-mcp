@@ -118,10 +118,13 @@ def _tool_error(exc: Exception) -> ToolError | None:
     if isinstance(exc, qnx_exc.NoUniqueMatch):
         return ToolError(
             "More than one Nexus resource matches; refusing to act on an ambiguous target. "
-            "Nothing was changed."
+            "List projects/jobs to find the exact id and retry with that. Nothing was changed."
         )
     if isinstance(exc, qnx_exc.JobError):
-        return ToolError(f"Nexus job failed: {detail(exc)}")
+        return ToolError(
+            f"Nexus job failed: {detail(exc)}. Check nexus_job_status for detail before "
+            "deciding whether to resubmit — do not resubmit unchanged."
+        )
     if isinstance(
         exc,
         (
