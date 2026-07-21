@@ -10,6 +10,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   pypi:
     runs-on: ubuntu-latest
@@ -17,19 +20,25 @@ jobs:
     permissions:
       id-token: write # OIDC for PyPI Trusted Publishing
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
       - run: uv build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1
 
   mcp-registry:
     needs: pypi
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # OIDC for the MCP registry GitHub auth
+      id-token: write # OIDC proves the Blite-HQ GitHub identity to the MCP registry
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - name: Install mcp-publisher (pinned + checksum-verified)
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_linux_amd64.tar.gz"
+          echo "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
       - name: Publish to the MCP Registry
-        uses: modelcontextprotocol/registry-github-actions/publish@main
-        with:
-          server-json: server.json
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
