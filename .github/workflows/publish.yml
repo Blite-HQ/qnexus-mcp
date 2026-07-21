@@ -1,0 +1,35 @@
+name: Publish
+
+# Publishes to PyPI via Trusted Publishing (OIDC — no API token) when a GitHub Release is published,
+# then re-publishes the MCP registry entry. Requires (one-time, by a maintainer):
+#   - a PyPI "pending publisher" for `qnexus-mcp` pointing at Blite-HQ/qnexus-mcp / publish.yml / env `pypi`
+#   - a GitHub Environment named `pypi`
+# See docs/PUBLISHING.md.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC for PyPI Trusted Publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  mcp-registry:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC for the MCP registry GitHub auth
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish to the MCP Registry
+        uses: modelcontextprotocol/registry-github-actions/publish@main
+        with:
+          server-json: server.json
