@@ -48,3 +48,11 @@ def test_bad_max_credits_env_raises():
 def test_negative_max_credits_rejected():
     with pytest.raises(ValidationError):
         ServerConfig(max_credits=-1.0)
+
+
+def test_projects_allowlist_parsed_from_cli_and_env():
+    c = config_from_sources(["--projects", "sandbox,demo"], env={})
+    assert c.projects == frozenset({"sandbox", "demo"})
+    c = config_from_sources([], env={"QNEXUS_MCP_PROJECTS": "sandbox"})
+    assert c.projects == frozenset({"sandbox"})
+    assert config_from_sources([], env={}).projects is None

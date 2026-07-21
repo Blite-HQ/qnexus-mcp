@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 VALID_TOOLSETS = frozenset({"read", "execute", "manage", "destructive"})
 DEFAULT_TOOLSETS = frozenset({"read"})
+DEFAULT_PROJECT = "qnexus-mcp"  # project used when a tool call names none
 
 
 class ServerConfig(BaseModel):
@@ -21,7 +22,9 @@ class ServerConfig(BaseModel):
     allow_hardware: bool = False
     allow_destructive: bool = False
     max_credits: float = Field(default=0.0, ge=0.0)
-    projects: tuple[str, ...] | None = None  # reserved; enforcement not yet wired
+    # Project allowlist for every mutating tool (execute/manage/destructive). None = all allowed.
+    # Enforced by guards.check_project_allowed; reads are unaffected.
+    projects: frozenset[str] | None = None
 
     @field_validator("toolsets")
     @classmethod
@@ -46,6 +49,7 @@ def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig
     p.add_argument("--allow-hardware", action="store_true", default=None)
     p.add_argument("--allow-destructive", action="store_true", default=None)
     p.add_argument("--max-credits", type=float)
+    p.add_argument("--projects")
     args, _ = p.parse_known_args(argv)
 
     def flag(cli: bool | None, key: str, default: bool) -> bool:
@@ -67,10 +71,13 @@ def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig
         except ValueError as exc:
             raise ValueError(f"QNEXUS_MCP_MAX_CREDITS must be a number, got {raw!r}") from exc
 
+    projects = _split(args.projects) or _split(env.get("QNEXUS_MCP_PROJECTS"))
+
     return ServerConfig(
         toolsets=toolsets,
         allow_spend=flag(args.allow_spend, "QNEXUS_MCP_ALLOW_SPEND", False),
         allow_hardware=flag(args.allow_hardware, "QNEXUS_MCP_ALLOW_HARDWARE", False),
         allow_destructive=flag(args.allow_destructive, "QNEXUS_MCP_ALLOW_DESTRUCTIVE", False),
         max_credits=max_credits,
+        projects=projects,
     )

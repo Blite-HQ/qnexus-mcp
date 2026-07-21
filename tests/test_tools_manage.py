@@ -2,7 +2,11 @@ from qnexus_mcp.tools.manage import MANAGE_SPECS, nexus_create_project
 
 
 def test_manage_specs_shape():
-    assert {s.name for s in MANAGE_SPECS} == {"nexus_create_project", "nexus_upload_circuit"}
+    assert {s.name for s in MANAGE_SPECS} == {
+        "nexus_create_project",
+        "nexus_upload_circuit",
+        "nexus_upload_program",
+    }
     assert all(
         s.toolset == "manage" and not s.read_only and not s.is_destructive for s in MANAGE_SPECS
     )
