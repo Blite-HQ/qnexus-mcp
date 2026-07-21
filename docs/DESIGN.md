@@ -304,6 +304,10 @@ odds: identical Apache-2.0 license, DCO (not CLA) IP cleanliness, dependence onl
 
 ## 15. Milestones
 
+**Status (2026-07-21): M0–M3 DONE and committed; read + execute paths verified live against real Nexus
+(Bell state on `H2-1LE`). M4 (publish) and M5 (public flip) pending — they need the maintainer's GitHub
+handle and an explicit go-ahead to create the public repo.**
+
 - **M0 — Repo hygiene (public-ready first commit):** LICENSE, NOTICE, README + disclaimer, SECURITY,
   CONTRIBUTING (DCO), CoC, CI skeleton, `pyproject`. No secrets. *(Gate before the repo is made public.)*
 - **M1 — Read toolset + auth status + permission scaffolding** (register-time omission, config surface).
