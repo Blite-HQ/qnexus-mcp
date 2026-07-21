@@ -24,12 +24,30 @@ class NexusClient(Protocol):
     def job_status(self, job_id: str) -> dict[str, Any]: ...
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
     def get_results(self, job_id: str) -> dict[str, Any]: ...
+    def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float: ...
+    def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]: ...
+    def submit(
+        self,
+        circuit: str,
+        n_shots: int,
+        device: str,
+        project: str | None = None,
+        max_cost: float | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]: ...
+    def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]: ...
 
 
 def _qnx() -> Any:
     import qnexus
 
     return qnexus
+
+
+def _pytket_qasm() -> Any:
+    import pytket.qasm
+
+    return pytket.qasm
 
 
 def _records(dataframable: Any) -> list[dict[str, Any]]:
@@ -82,4 +100,62 @@ class QnexusClient:
         result = qnx.jobs.results(job)[0].download_result()  # VERIFY LIVE signatures
         counts = {str(k): int(v) for k, v in result.get_counts().items()}
         out: dict[str, Any] = redact({"id": job_id, "counts": counts})
+        return out
+
+    # --- execute path (all VERIFY LIVE against the real SDK at M2.2 smoke) -------------------
+
+    def _upload(self, qnx: Any, circuit: str, project: str | None) -> tuple[Any, Any]:
+        circ = _pytket_qasm().circuit_from_qasm_str(circuit)  # VERIFY LIVE: QASM3 parse entrypoint
+        project_ref = qnx.projects.get_or_create(name=project or "qnexus-mcp")
+        circ_ref = qnx.circuits.upload(circuit=circ, name="qnexus-mcp-circuit", project=project_ref)
+        return circ_ref, project_ref
+
+    def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float:
+        qnx = _qnx()
+        circ_ref, _ = self._upload(qnx, circuit, None)
+        cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
+        return float(cost or 0.0)
+
+    def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]:
+        qnx = _qnx()
+        circ_ref, project_ref = self._upload(qnx, circuit, project)
+        compiled = qnx.compile(
+            programs=[circ_ref],
+            backend_config=qnx.QuantinuumConfig(device_name=device),
+            name="qnexus-mcp-compile",
+            project=project_ref,
+        )
+        out: dict[str, Any] = redact({"device": device, "compiled": str(compiled[0])})
+        return out
+
+    def submit(
+        self,
+        circuit: str,
+        n_shots: int,
+        device: str,
+        project: str | None = None,
+        max_cost: float | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        qnx = _qnx()
+        circ_ref, project_ref = self._upload(qnx, circuit, project)
+        job = qnx.start_execute_job(
+            programs=[circ_ref],
+            n_shots=[n_shots],
+            backend_config=qnx.QuantinuumConfig(device_name=device),
+            name=f"qnexus-mcp-{idempotency_key or 'exec'}",
+            project=project_ref,
+            max_cost=[max_cost] if max_cost else [],
+            valid_check=True,
+        )
+        out: dict[str, Any] = redact({"job_id": str(getattr(job, "id", job)), "device": device})
+        return out
+
+    def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]:
+        qnx = _qnx()
+        job = qnx.jobs.get(id=job_id)
+        qnx.jobs.wait_for(job, timeout=timeout)
+        result = qnx.jobs.results(job)[0].download_result()
+        counts = {str(k): int(v) for k, v in result.get_counts().items()}
+        out: dict[str, Any] = redact({"job_id": job_id, "counts": counts})
         return out

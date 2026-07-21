@@ -42,6 +42,18 @@ class FakeClient:
     def get_results(self, job_id):
         return {"id": job_id, "counts": {"00": 51, "11": 49}}
 
+    def estimate_cost(self, circuit, n_shots, device):
+        return 0.0 if device.upper().endswith("LE") else 3.0
+
+    def compile(self, circuit, device, project=None):
+        return {"device": device, "compiled": "compiled-ok"}
+
+    def submit(self, circuit, n_shots, device, project=None, max_cost=None, idempotency_key=None):
+        return {"job_id": "j-new", "device": device, "idempotency_key": idempotency_key}
+
+    def wait_and_results(self, job_id, timeout=None):
+        return {"job_id": job_id, "counts": {"00": 51, "11": 49}}
+
 
 @pytest.fixture
 def fake_client():
