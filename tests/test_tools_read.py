@@ -1,9 +1,4 @@
-from qnexus_mcp.config import ServerConfig
-from qnexus_mcp.tools.read import READ_SPECS
-
-
-def _by_name(name):
-    return next(s for s in READ_SPECS if s.name == name)
+from qnexus_mcp.tools.read import READ_SPECS, nexus_list_devices, nexus_list_jobs
 
 
 def test_all_read_specs_are_read_only():
@@ -22,6 +17,11 @@ def test_expected_read_tools_present():
     } <= names
 
 
-def test_list_devices_handler_returns_client_data(fake_client):
-    out = _by_name("nexus_list_devices").handler(fake_client, ServerConfig(), None)
+async def test_list_devices_returns_client_data(fake_client, make_ctx):
+    out = await nexus_list_devices(make_ctx(fake_client))
     assert out == [{"name": "H2-1LE", "status": "online", "billable": False}]
+
+
+async def test_list_jobs_passes_filters(fake_client, make_ctx):
+    out = await nexus_list_jobs(make_ctx(fake_client), project="p1")
+    assert out == [{"id": "j1", "status": "COMPLETED"}]
