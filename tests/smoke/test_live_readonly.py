@@ -24,6 +24,25 @@ def test_live_auth_and_devices():
 
     devices = client.list_devices()
     assert devices, "expected at least one available device"
-    assert any(str(d.get("name", "")).upper().endswith("LE") for d in devices), (
-        "expected a free noiseless emulator (a *-1LE device) to be listed"
+    names = [str(d.get("device_name") or "") for d in devices]
+    assert any(n.upper().endswith("LE") for n in names), (
+        f"expected a free noiseless emulator (a *-1LE device); saw {names}"
     )
+
+
+def test_live_submit_free_emulator_bell():
+    """End-to-end: compile + run a Bell circuit on the free H2-1LE emulator (0 HQC)."""
+    from qnexus_mcp.client import QnexusClient
+
+    qasm = (
+        'OPENQASM 2.0;\ninclude "qelib1.inc";\n'
+        "qreg q[2];\ncreg c[2];\nh q[0];\ncx q[0],q[1];\nmeasure q -> c;\n"
+    )
+    client = QnexusClient()
+    job = client.submit(circuit=qasm, n_shots=20, device="H2-1LE")
+    assert job["device"] == "H2-1LE" and job["job_id"]
+
+    results = client.wait_and_results(job["job_id"], timeout=180)
+    counts = results["counts"]
+    assert sum(counts.values()) == 20
+    assert set(counts) <= {"00", "11"}, f"expected only Bell outcomes, saw {counts}"

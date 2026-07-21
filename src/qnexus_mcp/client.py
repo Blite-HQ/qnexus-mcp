@@ -50,6 +50,15 @@ def _pytket_qasm() -> Any:
     return pytket.qasm
 
 
+def _bitstrings(counts: Any) -> dict[str, int]:
+    """Format a pytket counts mapping (tuple keys like (0, 1)) as bitstring -> count."""
+    out: dict[str, int] = {}
+    for key, value in counts.items():
+        bits = "".join(str(b) for b in key) if isinstance(key, (tuple, list)) else str(key)
+        out[bits] = int(value)
+    return out
+
+
 def _records(dataframable: Any) -> list[dict[str, Any]]:
     """qnexus returns DataframableList; .df() -> pandas -> list of plain, redacted dicts."""
     rows: list[dict[str, Any]] = [
@@ -59,7 +68,7 @@ def _records(dataframable: Any) -> list[dict[str, Any]]:
 
 
 class QnexusClient:
-    """Real implementation over the qnexus SDK (VERIFY LIVE signatures at M1.9)."""
+    """Real implementation over the qnexus SDK (read + execute paths verified live 2026-07-21)."""
 
     def auth_status(self) -> dict[str, Any]:
         qnx = _qnx()
@@ -80,12 +89,21 @@ class QnexusClient:
         return _records(_qnx().quotas.get_all())
 
     def list_jobs(self) -> list[dict[str, Any]]:
+        # NOTE: jobs.get_all() (the LIST endpoint) was observed returning 500 / server-side
+        # timeouts on the event account (2026-07-21). submit/status/results-by-id are unaffected.
         return _records(_qnx().jobs.get_all())
 
     def job_status(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        job = qnx.jobs.get(id=job_id)  # VERIFY LIVE: get-by-id kwarg
-        out: dict[str, Any] = redact({"id": job_id, "status": str(qnx.jobs.status(job))})
+        st = qnx.jobs.status(qnx.jobs.get(id=job_id))
+        out: dict[str, Any] = redact(
+            {
+                "id": job_id,
+                "status": str(getattr(st.status, "value", st.status)),
+                "message": getattr(st, "message", None),
+                "queue_position": getattr(st, "queue_position", None),
+            }
+        )
         return out
 
     def job_cost(self, job_id: str) -> dict[str, Any]:
@@ -96,16 +114,14 @@ class QnexusClient:
 
     def get_results(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        job = qnx.jobs.get(id=job_id)
-        result = qnx.jobs.results(job)[0].download_result()  # VERIFY LIVE signatures
-        counts = {str(k): int(v) for k, v in result.get_counts().items()}
-        out: dict[str, Any] = redact({"id": job_id, "counts": counts})
+        result = qnx.jobs.results(qnx.jobs.get(id=job_id))[0].download_result()
+        out: dict[str, Any] = redact({"id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
 
     # --- execute path (all VERIFY LIVE against the real SDK at M2.2 smoke) -------------------
 
     def _upload(self, qnx: Any, circuit: str, project: str | None) -> tuple[Any, Any]:
-        circ = _pytket_qasm().circuit_from_qasm_str(circuit)  # VERIFY LIVE: QASM3 parse entrypoint
+        circ = _pytket_qasm().circuit_from_qasm_str(circuit)  # OpenQASM 2 (verified live)
         project_ref = qnx.projects.get_or_create(name=project or "qnexus-mcp")
         circ_ref = qnx.circuits.upload(circuit=circ, name="qnexus-mcp-circuit", project=project_ref)
         return circ_ref, project_ref
@@ -139,16 +155,24 @@ class QnexusClient:
     ) -> dict[str, Any]:
         qnx = _qnx()
         circ_ref, project_ref = self._upload(qnx, circuit, project)
-        job = qnx.start_execute_job(
+        config = qnx.QuantinuumConfig(device_name=device)
+        tag = idempotency_key or "job"
+        compiled = qnx.compile(
             programs=[circ_ref],
+            backend_config=config,
+            name=f"qnexus-mcp-compile-{tag}",
+            project=project_ref,
+        )
+        job = qnx.start_execute_job(
+            programs=[compiled[0]],
             n_shots=[n_shots],
-            backend_config=qnx.QuantinuumConfig(device_name=device),
-            name=f"qnexus-mcp-{idempotency_key or 'exec'}",
+            backend_config=config,
+            name=f"qnexus-mcp-{tag}",
             project=project_ref,
             max_cost=[max_cost] if max_cost else [],
             valid_check=True,
         )
-        out: dict[str, Any] = redact({"job_id": str(getattr(job, "id", job)), "device": device})
+        out: dict[str, Any] = redact({"job_id": str(job.id), "device": device})
         return out
 
     def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]:
@@ -156,6 +180,5 @@ class QnexusClient:
         job = qnx.jobs.get(id=job_id)
         qnx.jobs.wait_for(job, timeout=timeout)
         result = qnx.jobs.results(job)[0].download_result()
-        counts = {str(k): int(v) for k, v in result.get_counts().items()}
-        out: dict[str, Any] = redact({"job_id": job_id, "counts": counts})
+        out: dict[str, Any] = redact({"job_id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
