@@ -10,14 +10,16 @@ from __future__ import annotations
 
 DEFAULT_DEVICE = "H2-1LE"
 
-
-def is_hardware(device_name: str) -> bool:
-    name = device_name.upper()
-    return not (name.endswith("LE") or name.endswith("SC") or name.endswith("E"))
+# Explicit allowlist of known FREE devices. Everything else fails SAFE (treated as billable), so a
+# future billable device whose name happens to end in LE/SC can never silently skip the SpendGuard.
+FREE_DEVICES = frozenset({"H2-1LE", "H1-1LE", "H2-1SC", "H1-1SC"})
 
 
 def is_billable(device_name: str) -> bool:
-    name = device_name.upper()
-    if name.endswith("LE") or name.endswith("SC"):
-        return False
-    return name.endswith("E") or is_hardware(name)
+    return device_name.upper() not in FREE_DEVICES
+
+
+def is_hardware(device_name: str) -> bool:
+    # Real QPUs are billable and not emulators (no trailing 'E'). Unknown billable names default to
+    # hardware, so they require --allow-hardware (the more restrictive gate).
+    return is_billable(device_name) and not device_name.upper().endswith("E")

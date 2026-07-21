@@ -112,7 +112,8 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 > *existing* job's HQC cost use `nexus_job_cost` (`qnx.jobs.cost`), which stays in `read`.
 > `openWorldHint: true` on every tool (all touch the cloud). There is no "costs money" annotation in the MCP vocabulary — spend-but-additive
 > execution is `destructive: false` yet still gated for cost server-side (§6). All submit/execute tools are
-> `idempotent: false` (each call is a new billed run); retry-safety comes from idempotency keys, not the hint.
+> `idempotent: false` (each call is a new billed run); double-spend is prevented by the mandatory
+> confirmation on billable submits, not by the hint.
 
 ## 5. Authentication
 
@@ -157,7 +158,9 @@ pre-check. Real hardware additionally requires `--allow-hardware`. `valid_check=
 
 **Layer 4 — In-protocol confirmation (the differentiator).** Every `$` or `X` tool: estimate cost / name
 the target resource → **`ctx.elicit()`** human confirmation *inside the protocol* → execute; refuse above
-the `--max-credits` ceiling. **Idempotency keys** make retries safe (a retried `submit` never double-charges).
+the `--max-credits` ceiling. A deterministic **idempotency tag** labels each submission; `start_execute_job` has no server-side
+idempotency parameter, so the **mandatory confirmation on every billable submit is the real double-spend
+protection** (a retry re-prompts). Shot counts are bounded to cap queue pressure.
 
 **Default posture rationale (read-only strict).** Reads and executions are *not* comparable even when the
 execution is free: execution enqueues work on a shared resource (queue/network saturation, blocking waits),
@@ -184,7 +187,7 @@ drift. Read-only-by-default removes that entire class of risk. Running circuits 
 | **Confused deputy / over-broad authority** | The agent could use our ambient `qnexus` credential beyond user intent | Least privilege; read-only default; per-op severity gates; optional per-project allowlist |
 | **Tool poisoning / line-jumping / rug pull** | Tool descriptions enter LLM context at `tools/list` before any call (Invariant Labs PoC exfiltrated `~/.ssh/id_rsa`) | Clean, static, auditable descriptions; **no** hidden instructions; **no** silent `tools/list_changed` mutation; signed/hash-pinned releases; reserved package name |
 | **Token theft / leakage** | Spec-named risk; every place code reads a token is a leak surface | Never handle the token; redact all secrets from logs, errors, tool results; short-lived + logout guidance |
-| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits`, max shots/jobs/concurrency); rate limiting; serialized mutations; idempotency keys |
+| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits` ceiling + bounded shot counts) + mandatory confirmation on billable submits; rate limiting and serialized mutations are planned |
 | **Path / config exfiltration** | If any tool touches the filesystem (e.g. reading a QASM file) | Schema-validate + canonicalize/allowlist paths; block traversal and reads of `~/.ssh`, dotfiles, MCP config, the token cache |
 
 **Must-implement checklist:** server-enforced spend caps + confirmation on every `$`/`X` op · emulator +

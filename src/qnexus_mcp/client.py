@@ -147,7 +147,8 @@ class QnexusClient:
             name="qnexus-mcp-compile",
             project=project_ref,
         )
-        out: dict[str, Any] = redact({"device": device, "compiled": str(compiled[0])})
+        compiled_id = str(getattr(compiled[0], "id", compiled[0]))
+        out: dict[str, Any] = redact({"device": device, "compiled": compiled_id})
         return out
 
     def submit(
@@ -214,21 +215,25 @@ class QnexusClient:
     def cancel_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         qnx.jobs.cancel(qnx.jobs.get(id=job_id))
-        return {"job_id": job_id, "cancelled": True}
+        out: dict[str, Any] = redact({"job_id": job_id, "cancelled": True})
+        return out
 
     def delete_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
         qnx.jobs.delete(qnx.jobs.get(id=job_id))
-        return {"job_id": job_id, "deleted": True}
+        out: dict[str, Any] = redact({"job_id": job_id, "deleted": True})
+        return out
 
     def archive_project(self, name: str) -> dict[str, Any]:
         qnx = _qnx()
         proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
         qnx.projects.update(proj, archive=True)
-        return {"name": name, "archived": True}
+        out: dict[str, Any] = redact({"name": name, "archived": True})
+        return out
 
     def delete_project(self, name: str) -> dict[str, Any]:
         qnx = _qnx()
         proj = qnx.projects.get(name_like=name)  # VERIFY LIVE: exact get-by-name filter
         qnx.projects.delete(proj)
-        return {"name": name, "deleted": True}
+        out: dict[str, Any] = redact({"name": name, "deleted": True})
+        return out

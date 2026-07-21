@@ -7,18 +7,20 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from fastmcp.exceptions import ToolError
+
 from .backends import is_billable, is_hardware
 from .config import ServerConfig
 
 Confirm = Callable[[str], Awaitable[bool]]
 
 
-class SpendDenied(Exception):
-    """Raised when a spend / hardware / confirmation guard blocks an action."""
+class SpendDenied(ToolError):
+    """Blocks a spend/hardware action. Subclasses ToolError so its message reaches the agent."""
 
 
-class ConfirmationDenied(Exception):
-    """Raised when a destructive action is not confirmed by the user."""
+class ConfirmationDenied(ToolError):
+    """A destructive/spend action was not confirmed. ToolError so its message reaches the agent."""
 
 
 class SpendGuard:
