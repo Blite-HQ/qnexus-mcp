@@ -20,7 +20,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from fastmcp.exceptions import ToolError
 
-from .backends import is_hardware
+from .backends import is_billable, is_hardware
 from .config import DEFAULT_PROJECT
 from .sanitize import redact
 
@@ -273,6 +273,13 @@ class QnexusClient:
         qnx = _qnx()
         circ_ref, _ = self._upload(qnx, circuit, None)
         cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
+        if cost is None and is_billable(device):
+            # Never let a missing estimate read as "0 HQC": the --max-credits gate and the user's
+            # confirmation would both be based on a fiction. Refuse instead.
+            raise ToolError(
+                f"Nexus returned no cost estimate for {device}; refusing to treat that as free. "
+                "Retry, or use the free H2-1LE emulator."
+            )
         return float(cost or 0.0)
 
     @_mapped
