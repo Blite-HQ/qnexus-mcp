@@ -36,8 +36,8 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 - Blocking SDK calls run in worker threads with bounded waits (default 300 s), so a slow or hung Nexus
   call can never freeze the server or hang the session.
 - CI/publish workflows run with least-privilege tokens and actions pinned to commit SHAs; releases
-  publish to PyPI exclusively via Trusted Publishing (OIDC, no stored tokens); Dependabot + `pip-audit`
-  watch the dependency tree.
+  publish to PyPI exclusively via Trusted Publishing (OIDC, no stored tokens); Dependabot +
+  `osv-scanner` watch the dependency tree.
 
 ### Verified
 
