@@ -13,6 +13,7 @@ from fastmcp import Context
 
 from .client import NexusClient
 from .config import ServerConfig
+from .guards import Confirm
 
 _CLIENT_ATTR = "_qnexus_mcp_client"
 _CONFIG_ATTR = "_qnexus_mcp_config"
@@ -31,3 +32,14 @@ def client_of(ctx: Context) -> NexusClient:
 def config_of(ctx: Context) -> ServerConfig:
     config: ServerConfig = getattr(ctx.fastmcp, _CONFIG_ATTR)
     return config
+
+
+def confirm_from_ctx(ctx: Context) -> Confirm:
+    """Build a yes/no confirmation callback backed by the MCP client's elicitation."""
+
+    async def confirm(message: str) -> bool:
+        # response_type=bool is valid at runtime; mypy mis-resolves elicit's overloaded signature.
+        result = await ctx.elicit(message, response_type=bool)  # type: ignore[arg-type]
+        return getattr(result, "action", None) == "accept" and bool(getattr(result, "data", False))
+
+    return confirm

@@ -54,6 +54,24 @@ class FakeClient:
     def wait_and_results(self, job_id, timeout=None):
         return {"job_id": job_id, "counts": {"00": 51, "11": 49}}
 
+    def create_project(self, name, description=None):
+        return {"name": name, "id": "proj-new"}
+
+    def upload_circuit(self, circuit, project, name):
+        return {"name": name, "id": "circ-new", "project": project}
+
+    def cancel_job(self, job_id):
+        return {"job_id": job_id, "cancelled": True}
+
+    def delete_job(self, job_id):
+        return {"job_id": job_id, "deleted": True}
+
+    def archive_project(self, name):
+        return {"name": name, "archived": True}
+
+    def delete_project(self, name):
+        return {"name": name, "deleted": True}
+
 
 @pytest.fixture
 def fake_client():

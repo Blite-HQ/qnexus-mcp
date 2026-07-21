@@ -13,18 +13,9 @@ from typing import Any
 from fastmcp import Context
 
 from ..backends import DEFAULT_DEVICE, is_billable
-from ..context import client_of, config_of
-from ..guards import Confirm, SpendGuard
+from ..context import client_of, config_of, confirm_from_ctx
+from ..guards import SpendGuard
 from ..permissions import ToolSpec
-
-
-def _confirm_from_ctx(ctx: Context) -> Confirm:
-    async def confirm(message: str) -> bool:
-        # response_type=bool is valid at runtime; mypy mis-resolves elicit's overloaded signature.
-        result = await ctx.elicit(message, response_type=bool)  # type: ignore[arg-type]
-        return getattr(result, "action", None) == "accept" and bool(getattr(result, "data", False))
-
-    return confirm
 
 
 async def nexus_estimate_cost(
@@ -59,7 +50,7 @@ async def nexus_submit(
     guard = SpendGuard(config)
     estimated = client.estimate_cost(circuit, n_shots, device) if is_billable(device) else 0.0
     await guard.check_and_confirm(
-        device=device, estimated_cost=estimated, confirm=_confirm_from_ctx(ctx)
+        device=device, estimated_cost=estimated, confirm=confirm_from_ctx(ctx)
     )
     key = guard.idempotency_key({"circuit": circuit, "n_shots": n_shots, "device": device})
     return client.submit(

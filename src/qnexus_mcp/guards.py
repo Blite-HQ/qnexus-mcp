@@ -17,6 +17,10 @@ class SpendDenied(Exception):
     """Raised when a spend / hardware / confirmation guard blocks an action."""
 
 
+class ConfirmationDenied(Exception):
+    """Raised when a destructive action is not confirmed by the user."""
+
+
 class SpendGuard:
     def __init__(self, config: ServerConfig) -> None:
         self._config = config
