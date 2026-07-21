@@ -31,8 +31,8 @@ make the handoff a single mechanical step.
    left to the LLM or the client.
 2. **In-protocol confirmation is the differentiator.** Every credit-spending or destructive action does a
    cost/target estimate → an MCP `elicitation` confirmation → then executes, refusing above a ceiling.
-   None of the incumbent official servers (Stripe, PayPal, Grafana, GitLab, Atlassian, Notion) do this
-   in-protocol — they only recommend it in docs.
+   Published official MCP servers typically only *recommend* human confirmation in their docs;
+   `qnexus-mcp` enforces it inside the protocol itself.
 3. **Adoptable.** License, toolchain, governance and packaging mirror or exceed Quantinuum's own repos, so
    the codebase reads as first-party and re-namespacing to `com.quantinuum.*` is trivial.
 
@@ -44,8 +44,8 @@ make the handoff a single mechanical step.
 - **No remote/HTTP transport in v1.** stdio only. A hosted OAuth 2.1 variant is a clean future add-on
   (§5) — the local design must not make it hard, but it is out of scope now.
 - **No token handling of our own.** Auth is delegated entirely to `qnexus` (§5).
-- **No 1:1 CRUD mirror of the SDK.** We expose consolidated, workflow-level tools (the Notion
-  anti-pattern is auto-generating flat tools from an API surface with no read/write/cost awareness).
+- **No 1:1 CRUD mirror of the SDK.** We expose consolidated, workflow-level tools (auto-generating
+  flat tools from an API surface, with no read/write/cost awareness, is the anti-pattern).
 
 ## 3. Architecture
 
@@ -60,10 +60,10 @@ qnexus  ── official Python SDK  ──HTTPS──▶  Nexus cloud (projects,
 ```
 
 - **Language / runtime:** Python 3.10–3.13 (matches `qnexus`/`pytket`), managed with `uv`.
-- **Framework:** [FastMCP 2.0](https://github.com/jlowin/fastmcp). Chosen because we wrap a Python SDK and
-  it provides, out of the box: `ToolAnnotations`, tag-based `enable/disable(..., only=True)`, `ctx.elicit()`
+- **Framework:** [FastMCP](https://github.com/jlowin/fastmcp) (2.x API surface; currently pinned to 3.x).
+  Chosen because we wrap a Python SDK and it provides, out of the box: `ToolAnnotations`, `ctx.elicit()`
   confirmation gates, structured output, `ToolError` + `mask_error_details`, and stdio + HTTP transports —
-  letting us mirror Grafana's `AddXTools(mcp, enableWrite)` gating pattern in Python.
+  letting us implement per-toolset gating declaratively in Python.
 - **Transport: stdio** — *standard input/output*, the local MCP transport: the client launches `qnexus-mcp`
   as a child process and the two exchange JSON-RPC over `stdin`/`stdout` (a pipe between two programs). It is
   **not** a network service and **not** a "studio" app. The only other MCP transport is HTTP, reserved for a
@@ -73,8 +73,6 @@ qnexus  ── official Python SDK  ──HTTPS──▶  Nexus cloud (projects,
   VS Code, Cursor, or an in-house agent. `qnexus-mcp` has **no dependency on any other project**; its only
   possible integration relationship is the inverse — another project (e.g. a larger agent platform) can *add*
   this server as one of its MCP servers, exactly as any client would.
-- **Reference models:** gating & tool-list enforcement from `github/github-mcp-server`; remote/dynamic-catalog
-  story (future) from `sentry-mcp`; framework ergonomics from FastMCP 2.0.
 
 ## 4. Tool catalog
 
@@ -99,7 +97,7 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 | | `nexus_submit_and_wait` | W/$ | not-readOnly, not-destructive, not-idempotent, openWorld |
 | **manage** *(opt-in)* | `nexus_create_project` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
 | | `nexus_upload_circuit` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
-| | `nexus_upload_program` (HUGR/QIR) | W | not-readOnly, not-destructive, not-idempotent, openWorld |
+| | `nexus_upload_program` (QIR) | W | not-readOnly, not-destructive, not-idempotent, openWorld |
 | **destructive** *(opt-in, double gate)* | `nexus_cancel_job` | X | not-readOnly, **destructive**, openWorld |
 | | `nexus_delete_job` | X | not-readOnly, **destructive**, openWorld |
 | | `nexus_archive_project` | X | not-readOnly, **destructive**, openWorld |
@@ -110,6 +108,10 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 > resource — so by the read-only-strict rationale (§6) it lives in the **`execute`** toolset (opt-in), even
 > though it is annotated `readOnly` for UX and its docstring documents the round-trip. For the pure read of an
 > *existing* job's HQC cost use `nexus_job_cost` (`qnx.jobs.cost`), which stays in `read`.
+> **`nexus_upload_program` is QIR-only.** The SDK also exposes a HUGR upload, but its own docstring
+> warns *"HUGR support in Nexus is subject to change. Until full support is achieved any programs
+> uploaded may not work in the future"* — we will not expose an endpoint the platform itself calls
+> unstable. HUGR support can be added once the SDK removes that caveat.
 > `openWorldHint: true` on every tool (all touch the cloud). There is no "costs money" annotation in the MCP vocabulary — spend-but-additive
 > execution is `destructive: false` yet still gated for cost server-side (§6). All submit/execute tools are
 > `idempotent: false` (each call is a new billed run); double-spend is prevented by the mandatory
@@ -142,19 +144,23 @@ so we delegate 100% to `qnexus`, which owns a hardened device-code flow with ref
 Four layers, **all enforced server-side**. MCP tool annotations are UX hints only and are treated as
 untrusted; the server is the source of truth.
 
-**Layer 1 — Register-time omission (GitHub pattern).** A tool that is not permitted by the launch config
+**Layer 1 — Register-time omission.** A tool that is not permitted by the launch config
 **does not appear in `tools/list` at all**. The agent cannot call what it cannot see. A single
 `is_allowed(tool)` derived from config filters the exposed set. Annotation-only gating is insufficient.
 
-**Layer 2 — Two-axis gating (Atlassian pattern — a tool must pass ALL filters).**
+**Layer 2 — Two-axis gating (a tool must pass ALL filters).**
 - *Capability axis:* `--toolsets read,execute,manage,destructive` — **default: `read`** only.
 - *Severity axis:* `--allow-spend` (default off), `--allow-hardware` (default off), `--allow-destructive`
   (default off).
 
 **Layer 3 — Safe backend default.** The default execution backend is **`H2-1LE`** (noiseless emulator,
 **0 HQC / free**). Any billable backend — real hardware (`H2-1`, `H1-1`) or noisy emulator (`*-1E`) —
-requires `--allow-spend` **and** a per-call `max_cost` **and** a passing `quotas.check_quota("simulation")`
-pre-check. Real hardware additionally requires `--allow-hardware`. `valid_check=True` is passed on submit.
+requires `--allow-spend` **and** stays under the `--max-credits` per-call ceiling (passed to the SDK as
+`max_cost`). Billable **emulators** additionally require a passing `quotas.check_quota("simulation")`
+pre-check. Real **hardware** additionally requires `--allow-hardware`; note the qnexus SDK exposes **no
+HQC-balance pre-check API** for hardware, so there the ceiling + mandatory confirmation are the only
+pre-submission guards. Launch-flag gates run *before* cost estimation, so a forbidden device never even
+enqueues the (free) estimation job. `valid_check=True` is passed on submit.
 
 **Layer 4 — In-protocol confirmation (the differentiator).** Every `$` or `X` tool: estimate cost / name
 the target resource → **`ctx.elicit()`** human confirmation *inside the protocol* → execute; refuse above
@@ -177,7 +183,7 @@ drift. Read-only-by-default removes that entire class of risk. Running circuits 
 | `--allow-hardware` | `QNEXUS_MCP_ALLOW_HARDWARE` | `false` | Permit real-QPU targets (implies review) |
 | `--allow-destructive` | `QNEXUS_MCP_ALLOW_DESTRUCTIVE` | `false` | Permit delete/cancel/archive |
 | `--max-credits` | `QNEXUS_MCP_MAX_CREDITS` | `0` | Hard per-call HQC ceiling; 0 blocks all spend |
-| `--projects` | `QNEXUS_MCP_PROJECTS` | *(all)* | Deny-by-default project allowlist (recommended) |
+| `--projects` | `QNEXUS_MCP_PROJECTS` | *(all)* | Project allowlist, enforced on every mutating tool (reads are unaffected) |
 
 ## 7. Security controls (threat model → mitigation)
 
@@ -187,7 +193,7 @@ drift. Read-only-by-default removes that entire class of risk. Running circuits 
 | **Confused deputy / over-broad authority** | The agent could use our ambient `qnexus` credential beyond user intent | Least privilege; read-only default; per-op severity gates; optional per-project allowlist |
 | **Tool poisoning / line-jumping / rug pull** | Tool descriptions enter LLM context at `tools/list` before any call (Invariant Labs PoC exfiltrated `~/.ssh/id_rsa`) | Clean, static, auditable descriptions; **no** hidden instructions; **no** silent `tools/list_changed` mutation; signed/hash-pinned releases; reserved package name |
 | **Token theft / leakage** | Spec-named risk; every place code reads a token is a leak surface | Never handle the token; redact all secrets from logs, errors, tool results; short-lived + logout guidance |
-| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits` ceiling + bounded shot counts) + mandatory confirmation on billable submits; rate limiting and serialized mutations are planned |
+| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits` ceiling + bounded shot counts) + mandatory confirmation on billable submits + a sliding-window submission rate limit (covers the free lane) + serialized cloud mutations |
 | **Path / config exfiltration** | If any tool touches the filesystem (e.g. reading a QASM file) | Schema-validate + canonicalize/allowlist paths; block traversal and reads of `~/.ssh`, dotfiles, MCP config, the token cache |
 
 **Must-implement checklist:** server-enforced spend caps + confirmation on every `$`/`X` op · emulator +
@@ -210,10 +216,17 @@ tool-list mutation · masked errors + sanitized outputs.
 ## 9. Error handling & output sanitization
 
 - Auth errors → clear "run `qnx login`" guidance; never leak token/cookie material.
-- Quota/cost errors → surface remaining vs required credits; refuse, don't guess.
-- Network/timeout → typed errors; **retry only reads**, never `submit` (avoids double-spend).
-- All `qnexus` exceptions mapped to `ToolError` with `mask_error_details`; job traces, URLs, and any
-  credential-shaped fields sanitized out of anything returned to the model.
+- Quota/cost errors → refuse with the reason, don't guess.
+- Network/timeout → typed, actionable errors that never bait a blind retry loop; guidance never
+  suggests retrying a `submit` (avoids double-spend). Waits are bounded (default 300 s, max 3600 s);
+  on timeout the job keeps running and the error says how to poll it.
+- All blocking SDK calls run in worker threads, so a slow or hung Nexus call can never freeze the
+  server's event loop (the SDK's `jobs.wait_for` runs its own `asyncio.run`, which *requires* a
+  loop-free thread).
+- All `qnexus`/network exceptions mapped to short, redacted `ToolError` messages at the client
+  boundary; anything unmapped is masked by `mask_error_details`. Known case: the Nexus jobs LIST
+  endpoint can return 500s — that maps to an explicit "Nexus-side issue, do not retry in a loop"
+  message rather than a hang or a cryptic failure.
 
 ## 10. Repo layout & packaging (adoptable-grade)
 
@@ -232,21 +245,22 @@ qnexus-mcp/
   .cz.toml                     # Commitizen / Conventional Commits / SemVer, tag_format v$version
   .pre-commit-config.yaml
   .github/
-    workflows/{ci.yml,publish.yml}   # ci: ruff+mypy+pytest matrix 3.10–3.13; publish: PyPI OIDC + registry
+    workflows/{ci.yml,publish.yml}   # ci: ruff+mypy+pytest matrix 3.10–3.13 + pip-audit; publish: PyPI OIDC + registry
     ISSUE_TEMPLATE/…, PULL_REQUEST_TEMPLATE.md, dependabot.yml
   src/qnexus_mcp/
     __init__.py
-    cli.py                     # arg/env parsing → config
-    config.py                  # toolsets + severity gates + ceilings (pydantic)
-    server.py                  # FastMCP app; registers only permitted tools (Layer 1)
-    auth.py                    # status only; never stores/reads secrets
-    _client.py                 # thin qnexus wrapper; input validation; output sanitization
-    guards.py                  # cost estimation, elicitation, idempotency, quota checks
+    cli.py                     # console entry point
+    config.py                  # toolsets + severity gates + ceilings + allowlist (pydantic)
+    backends.py                # device classification (free / billable / hardware)
+    sanitize.py                # secret redaction (keys and values)
+    permissions.py             # ToolSpec registry + register-time omission (Layer 1)
+    client.py                  # NexusClient Protocol + qnexus wrapper; error translation
+    context.py                 # per-server state binding + thread offload for blocking SDK calls
+    guards.py                  # SpendGuard, project allowlist, rate limit, idempotency
+    server.py                  # FastMCP app; registers only permitted tools
     tools/{read,execute,manage,destructive}.py
     py.typed
-  tests/
-    unit/                      # qnexus mocked; asserts guardrail logic
-    snapshots/                 # __toolsnaps__ of tool schemas
+  tests/                       # qnexus mocked; asserts guardrail logic + tool-schema snapshot
     smoke/                     # opt-in live, read-only + one free H2-1LE run
 ```
 
@@ -275,15 +289,18 @@ qnexus-mcp/
 - **Unit (qnexus mocked):** tool schemas; arg validation; **guardrail logic** — e.g. `submit` refuses without
   `elicit` confirmation; refuses a billable backend without `--allow-spend`; refuses above `max_cost`;
   destructive tools absent from `tools/list` without `--allow-destructive`.
-- **Snapshot tests** of every tool schema (`__toolsnaps__`, GitHub pattern) so descriptions/annotations
-  can't drift silently.
+- **Snapshot test** of the full tool catalog (names, descriptions, annotations, input schemas) so the
+  agent-facing surface can't drift silently.
 - **Opt-in live smoke** (env-gated): read-only calls + one tiny free `H2-1LE` run. **Billable submits never
   run in CI.**
-- Optional **agent-run eval harness** (Anthropic/Sentry/Cloudflare pattern) once tools stabilize.
+- Optional **agent-run eval harness** once tools stabilize.
 
 ## 13. Verify against live SDK before wiring (flagged discrepancies)
 
-Stream-D research read `qnexus` v0.46.0 source but flagged items to confirm before implementation:
+**Resolution (2026-07-21):** every item below was confirmed against the installed SDK and/or live Nexus
+during M1–M3 (the free-emulator string is `H2-1LE`; `circuits.cost` does submit a blocking free
+syntax-check job; destructive project lookups use the SDK's exact-match `projects.get(name=...)`).
+Kept for the record:
 
 1. Docs API index is **stale vs code**: `login_no_interaction` is `qnx.auth.login_no_interaction` (not
    top-level); `login_with_token` *is* top-level. (We use neither for login, but confirm `is_logged_in`.)
@@ -298,7 +315,7 @@ Stream-D research read `qnexus` v0.46.0 source but flagged items to confirm befo
 ## 14. Path to official (honest)
 
 No documented case exists of a *community-built* MCP server being taken over and rebranded as a vendor's
-official one — known official servers (Grafana, Playwright, Sentry) were first-party from day one. So the
+official one — the known official servers were first-party from day one. So the
 realistic route is: **build to first-party quality → gain traction + registry listings (+ real use during
 the Quantathon) → propose Quantinuum adopt/co-maintain.** Adoption is earned. The design keeps the handoff
 to a single mechanical step (re-namespacing `io.github.*` → `com.quantinuum.*`). Signals that maximize the
@@ -307,9 +324,9 @@ odds: identical Apache-2.0 license, DCO (not CLA) IP cleanliness, dependence onl
 
 ## 15. Milestones
 
-**Status (2026-07-21): M0–M3 DONE and committed; read + execute paths verified live against real Nexus
-(Bell state on `H2-1LE`). M4 (publish) and M5 (public flip) pending — they need the maintainer's GitHub
-handle and an explicit go-ahead to create the public repo.**
+**Status (2026-07-21): M0–M4 DONE and committed; read + execute paths verified live against real Nexus
+(Bell state on `H2-1LE`). M5 (public flip + first release) pending — it needs the maintainer's explicit
+go-ahead.**
 
 - **M0 — Repo hygiene (public-ready first commit):** LICENSE, NOTICE, README + disclaimer, SECURITY,
   CONTRIBUTING (DCO), CoC, CI skeleton, `pyproject`. No secrets. *(Gate before the repo is made public.)*
@@ -322,12 +339,10 @@ handle and an explicit go-ahead to create the public repo.**
 
 ## 16. Sources
 
-Research streams (2026-07-20). Full write-ups live in [`research/`](research/) — ecosystem audit, security
-& authorization, OSS adoptability, and the `qnexus` SDK surface. Summary of each stream:
-- MCP server audit (GitHub, Sentry, Grafana, Cloudflare, Stripe, PayPal, Atlassian, GitLab, Notion, Elastic, FastMCP).
+Research (2026-07-20), conducted against primary sources. Full write-ups live in
+[`research/`](research/):
 - MCP security & authorization (spec rev. 2025-11-25; OAuth 2.1 / PKCE / RFC 8707 / RFC 9728; tool-poisoning, confused-deputy, token-passthrough, rug-pull threat classes; tool annotations).
-- OSS adoptability & MCP distribution (Apache-2.0, DCO, PyPI Trusted Publishing, MCP Registry `server.json`, namespace mechanics).
 - `qnexus` v0.46.0 API surface (verified against source at `github.com/Quantinuum/qnexus`).
 
 Primary references: <https://modelcontextprotocol.io> · <https://docs.quantinuum.com/nexus/> ·
-<https://github.com/Quantinuum/qnexus> · <https://github.com/github/github-mcp-server> · <https://github.com/jlowin/fastmcp>
+<https://github.com/Quantinuum/qnexus> · <https://github.com/jlowin/fastmcp>

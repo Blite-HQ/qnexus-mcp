@@ -2,7 +2,7 @@
 
 Run with a real account:  QNEXUS_MCP_LIVE=1 uv run pytest tests/smoke/ -v
 (after `qnx login`). Never runs in CI. This is the checkpoint that verifies the QnexusClient
-signatures marked VERIFY LIVE against the installed SDK.
+read/execute signatures against the installed SDK and live Nexus.
 """
 
 import os

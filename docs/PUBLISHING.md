@@ -27,18 +27,33 @@ The `io.github.Blite-HQ` namespace is granted automatically to a Blite-HQ member
 the workflow runs (or via `mcp-publisher login github` for a manual publish). No pre-setup needed; the
 `name` in [`server.json`](../server.json) must stay `io.github.Blite-HQ/qnexus-mcp`.
 
-## Cut a release
+## Cut the FIRST release (v0.1.0)
 
-1. Bump the version (Commitizen reads the Conventional-Commit history):
+`cz bump` needs an existing tag to work from (with none it would compute v0.2.0 from the feat commits).
+The first release is therefore manual — and the version files already say `0.1.0`:
+
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.1.0] - YYYY-MM-DD` (today's date) and add a
+   fresh empty `## [Unreleased]` above it. Commit.
+2. Tag and push:
    ```bash
-   uv run cz bump           # updates version in pyproject + __init__, writes CHANGELOG, tags vX.Y.Z
+   git tag v0.1.0
    git push --follow-tags
    ```
-2. Create a **GitHub Release** for the new tag. That triggers `publish.yml`:
+3. Create a **GitHub Release** for `v0.1.0`. That triggers `publish.yml`:
    - builds the wheel/sdist and publishes to **PyPI** (OIDC, no token);
    - publishes the `server.json` entry to the **MCP Registry**.
-3. Verify: `uvx qnexus-mcp` runs from PyPI; the server appears at
+4. Verify: `uvx qnexus-mcp` runs from PyPI; the server appears at
    `https://registry.modelcontextprotocol.io/v0.1/servers?search=qnexus-mcp`.
+
+## Cut subsequent releases
+
+1. Bump the version (Commitizen reads the Conventional-Commit history since the last tag):
+   ```bash
+   uv run cz bump           # updates version in pyproject + __init__ + .cz.toml, updates CHANGELOG, tags vX.Y.Z
+   git push --follow-tags
+   ```
+2. Update `server.json` `version` fields to match, commit, then create the **GitHub Release** for the
+   new tag (same automation as above).
 
 ## The public flip (M5)
 

@@ -39,6 +39,11 @@
           "name": "QNEXUS_MCP_MAX_CREDITS",
           "description": "Hard per-call HQC ceiling; 0 blocks all spend (default: 0).",
           "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_PROJECTS",
+          "description": "Comma-separated project allowlist, enforced on every mutating tool (default: all projects).",
+          "isRequired": false
         }
       ]
     }
