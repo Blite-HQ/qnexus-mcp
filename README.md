@@ -7,8 +7,8 @@ wrapping the official [`qnexus`](https://github.com/Quantinuum/qnexus) Python SD
 > **Not affiliated with, endorsed by, or an official product of Quantinuum.** "Quantinuum" and "Nexus" are
 > trademarks of their respective owners, used here nominatively to describe compatibility.
 
-<!-- mcp-name: io.github.OWNER/qnexus-mcp -->
-<!-- NOTE: replace OWNER with the GitHub owner before publishing to the MCP registry (milestone M4). -->
+<!-- mcp-name: io.github.Blite-HQ/qnexus-mcp -->
+<!-- The registry namespace is confirmed against `mcp-publisher login github` at publish time (M4). -->
 
 ## Status
 
