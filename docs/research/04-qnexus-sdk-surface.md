@@ -1,4 +1,4 @@
-# 04 — The `qnexus` SDK surface we wrap
+# 04: The `qnexus` SDK surface we wrap
 
 **Researched 2026-07-20** against **`qnexus` v0.46.0** (tag `v0.46.0`, commit `30244a2e…`, released
 2026-06-30), read directly from source and cross-checked with docs.quantinuum.com. The repo moved from
@@ -16,16 +16,16 @@ source are flagged; **we did not invent any function name.**
 | `qnx.auth.login_no_interaction(user, pwd, ...)` | **no** (`qnx.auth.`) | Non-interactive user/pwd |
 | `qnx.login_with_token(refresh_token)` | yes | In-memory only; writes nothing to disk |
 | `qnx.logout()` | yes | Deletes token files + reloads client |
-| `qnx.auth.is_logged_in() -> bool` | via `qnx.auth` | Checks disk tokens + `GET /api/users/v1beta2/me` — **the "check auth status" primitive** |
+| `qnx.auth.is_logged_in() -> bool` | via `qnx.auth` | Checks disk tokens + `GET /api/users/v1beta2/me`; **the "check auth status" primitive** |
 
 - **Device-code flow:** `POST /auth/device/device_authorization` (`client_id="scales"`, `scope="myqos"`) →
   opens `verification_uri_complete` → polls `POST /auth/device/token` until 200.
-- **Token cache:** `~/.qnx/auth/` — `token.json` (refresh, cookie `myqos_oat`) + `id.json` (access, cookie
+- **Token cache:** `~/.qnx/auth/`: `token.json` (refresh, cookie `myqos_oat`) + `id.json` (access, cookie
   `myqos_id`); gated by `CONFIG.store_tokens` (default `True`).
 - **Config/env:** pydantic-settings, prefix **`NEXUS_`**, file `~/.qnexus/config` (override
   `NEXUS_CONFIG_FILE`); keys include `NEXUS_DOMAIN`/`NEXUS_HOST`, `NEXUS_STORE_TOKENS`, `NEXUS_TOKEN_PATH`.
 - **Nexus JupyterHub:** env `NEXUS_MANAGED_TOKENS` → managed mode; the refresh token is server-managed. **Do
-  not call `qnx.login()` inside the Hub** — auth is automatic.
+  not call `qnx.login()` inside the Hub**; auth is automatic.
 
 **Our stance:** the MCP server only calls `qnx.auth.is_logged_in()` and builds a client from the cached
 token. Login is out-of-band (`qnx login` in the terminal, once). We never read/store the token.
@@ -38,7 +38,7 @@ token. Login is out-of-band (`qnx login` in the terminal, once). We never read/s
 - **H2 device strings:** `H2-1` = real hardware; `H2-1E` = **noisy** emulator (**consumes HQCs**);
   **`H2-1LE` = noiseless emulator (FREE, no HQCs)**; `H2-1SC` = free syntax checker. Same pattern for H1.
   → **The safe default backend is `H2-1LE`.** (The string `"H2-Emulator"` seen in one doc summary is
-  **unverified** — treat `H2-1E`/`H2-1LE`/`H2-1SC` as canonical; **confirm the exact string live** before
+  **unverified**; treat `H2-1E`/`H2-1LE`/`H2-1SC` as canonical; **confirm the exact string live** before
   defaulting to it.)
 
 ## Capability → MCP tool map
@@ -47,24 +47,24 @@ Class: **R** = read/safe · **W** = write/create · **$** = credit-spending (HQC
 
 | SDK operation | Function (verified?) | Class | Proposed tool | Guardrail |
 |---|---|---|---|---|
-| Auth status | `qnx.auth.is_logged_in()` ✅ | R | `nexus_auth_status` | — |
-| List/get projects | `qnx.projects.get_all/get` ✅ | R | `nexus_list_projects` | — |
-| Create project | `qnx.projects.create/get_or_create` ✅ | W | `nexus_create_project` | — |
+| Auth status | `qnx.auth.is_logged_in()` ✅ | R | `nexus_auth_status` | n/a |
+| List/get projects | `qnx.projects.get_all/get` ✅ | R | `nexus_list_projects` | n/a |
+| Create project | `qnx.projects.create/get_or_create` ✅ | W | `nexus_create_project` | n/a |
 | Update/archive project | `qnx.projects.update(archive=)` ✅ | W/X | `nexus_archive_project` | confirm on archive |
 | Delete project | `qnx.projects.delete()` ✅ | **X** | `nexus_delete_project` | archived-first + explicit confirm; deletes all data |
-| List devices | `qnx.devices.get_all()` ✅ | R | `nexus_list_devices` | — |
+| List devices | `qnx.devices.get_all()` ✅ | R | `nexus_list_devices` | n/a |
 | Device status | `qnx.devices.status(QuantinuumConfig)` ✅ | R | `nexus_device_status` | QuantinuumConfig only; N/A for emulators |
-| Backend capabilities | `qnx.devices.supports_*` ✅ | R | `nexus_backend_supports` | — |
+| Backend capabilities | `qnx.devices.supports_*` ✅ | R | `nexus_backend_supports` | n/a |
 | Upload circuit | `qnx.circuits.upload(Circuit)` ✅ | W | `nexus_upload_circuit` | validate pytket; needs a project |
-| Get/download circuit | `qnx.circuits.get_all/get` ✅ + `CircuitRef.download_circuit()` | R | `nexus_get_circuit` | — |
-| Estimate cost | `qnx.circuits.cost()` ✅ | $0 | `nexus_estimate_cost` | ⚠ submits a real free `H2-*SC` job and blocks — belongs in the opt-in `execute` toolset |
+| Get/download circuit | `qnx.circuits.get_all/get` ✅ + `CircuitRef.download_circuit()` | R | `nexus_get_circuit` | n/a |
+| Estimate cost | `qnx.circuits.cost()` ✅ | $0 | `nexus_estimate_cost` | ⚠ submits a real free `H2-*SC` job and blocks, belongs in the opt-in `execute` toolset |
 | Upload HUGR/QIR/WASM/GPU | `qnx.hugr/qir/wasm_modules/gpu_decoder_configs.*` ✅ | W | `nexus_upload_program` | HUGR experimental |
 | Submit compile | `qnx.start_compile_job()` / `qnx.compile()` ✅ | W | `nexus_compile` | consumes time-based **compilation** quota, not HQCs |
 | **Submit execute** | `qnx.start_execute_job()` / `qnx.execute()` ✅ | **$** | `nexus_submit` | **default `*-1LE` (free); refuse hardware/`*-1E` unless allowed + `max_cost` set**; keep `valid_check=True` |
-| Job status / list | `qnx.jobs.status/get_all` ✅ | R | `nexus_job_status` | — |
+| Job status / list | `qnx.jobs.status/get_all` ✅ | R | `nexus_job_status` | n/a |
 | Wait for job | `qnx.jobs.wait_for()` ✅ | R (blocking) | (internal to `submit_and_wait`) | set timeout; prefer poll loop |
-| Job HQC cost | `qnx.jobs.cost/cost_confidence()` ✅ | R | `nexus_job_cost` | — |
-| Fetch results | `qnx.jobs.results()[i].download_result()` / `qnx.results.get(id)` ✅ | R | `nexus_get_results` | — |
+| Job HQC cost | `qnx.jobs.cost/cost_confidence()` ✅ | R | `nexus_job_cost` | n/a |
+| Fetch results | `qnx.jobs.results()[i].download_result()` / `qnx.results.get(id)` ✅ | R | `nexus_get_results` | n/a |
 | Retry job | `qnx.jobs.retry_submission()` ✅ | **$** | `nexus_retry_job` | re-spends HQCs; confirm |
 | Cancel job | `qnx.jobs.cancel()` ✅ | X | `nexus_cancel_job` | mutates remote; confirm |
 | Delete job | `qnx.jobs.delete()` ✅ | **X** | `nexus_delete_job` | confirm |
@@ -73,7 +73,7 @@ Class: **R** = read/safe · **W** = write/create · **$** = credit-spending (HQC
 
 ## Guardrail targets (the money & danger)
 
-- **Spends HQCs ($):** `execute`/`start_execute_job` and `retry_submission` — but **only** on hardware
+- **Spends HQCs ($):** `execute`/`start_execute_job` and `retry_submission`, but **only** on hardware
   (`H2-1`, `H1-1`) or **noisy** emulators (`*-1E`). `compile` uses the time-based **compilation** quota, not HQCs.
 - **The native ceiling exists:** `execute(..., max_cost=<HQC ceiling>, valid_check=True)` are real SDK
   kwargs; gate on `qnx.quotas.check_quota("simulation")` before any billable submit. We expose `max_cost`
@@ -114,9 +114,9 @@ counts = qnx.jobs.results(exec_job)[0].download_result().get_counts()
 3. Confirm signatures of `CircuitRef.download_circuit()`, `CompilationResultRef.get_output()`,
    `ExecutionResultRef.download_result()` before wiring the results tool.
 4. Confirm `qnx.circuits.cost()` behavior (blocking free `H2-1SC` job) on the real account.
-5. Treat any credential/roles/teams create/delete as W/X — those modules were only partially read (and are
+5. Treat any credential/roles/teams create/delete as W/X; those modules were only partially read (and are
    out of scope anyway, see `../DESIGN.md` §2).
 
 ## Sources (observed 2026-07-20)
-- `Quantinuum/qnexus` at tag `v0.46.0` — `qnexus/__init__.py`, `config.py`, `client/{auth,projects,circuits,devices,quotas,credentials,results}.py`, `client/jobs/{__init__,_compile,_execute}.py`, `models/__init__.py` (via `gh api …/contents/…?ref=30244a2e…`).
+- `Quantinuum/qnexus` at tag `v0.46.0`: `qnexus/__init__.py`, `config.py`, `client/{auth,projects,circuits,devices,quotas,credentials,results}.py`, `client/jobs/{__init__,_compile,_execute}.py`, `models/__init__.py` (via `gh api …/contents/…?ref=30244a2e…`).
 - docs.quantinuum.com/nexus: getting-started, devices API, qnexus API index, backend configs; systems H2 emulators (HQC consumption); Selene-in-Nexus.

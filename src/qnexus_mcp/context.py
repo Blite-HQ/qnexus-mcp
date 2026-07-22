@@ -59,7 +59,7 @@ async def call_sync(fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     """Run a blocking NexusClient call in a worker thread.
 
     Every qnexus call is synchronous (blocking httpx), and `qnx.jobs.wait_for` even runs its own
-    `asyncio.run()` — which raises RuntimeError if invoked on a running event loop. Offloading to a
+    `asyncio.run()`, which raises RuntimeError if invoked on a running event loop. Offloading to a
     thread keeps the server responsive during long waits and gives the SDK a loop-free thread.
     """
     return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))

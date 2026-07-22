@@ -12,7 +12,7 @@ certifying you have the right to submit it under the project's license:
 git commit -s -m "feat: ..."
 ```
 
-This adds a `Signed-off-by: Your Name <you@example.com>` line. No copyright is assigned to anyone — every
+This adds a `Signed-off-by: Your Name <you@example.com>` line. No copyright is assigned to anyone; every
 contribution stays under Apache-2.0 with clean provenance.
 
 ## Development setup
@@ -40,7 +40,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `f
 
 ## Design & tests
 
-- Read [`docs/DESIGN.md`](docs/DESIGN.md) before proposing new tools — especially §6 (permissions) and §7
+- Read [`docs/DESIGN.md`](docs/DESIGN.md) before proposing new tools, especially §6 (permissions) and §7
   (security). Every spend/destructive action is enforced **server-side**.
-- New tools need unit tests (mock the Nexus client — see `tests/conftest.py`). Never add a tool that can
+- New tools need unit tests (mock the Nexus client; see `tests/conftest.py`). Never add a tool that can
   spend credits or mutate state without a guard and a test proving the guard blocks by default.

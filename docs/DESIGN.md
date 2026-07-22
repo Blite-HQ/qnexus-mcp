@@ -1,4 +1,4 @@
-# qnexus-mcp — Design
+# qnexus-mcp: Design
 
 **Status:** FROZEN v1 (design) · **Date:** 2026-07-20
 
@@ -15,8 +15,8 @@
 
 There is **no official MCP server for Quantinuum Nexus** (verified 2026-07-20 against Quantinuum/CQCL
 repos and docs). `qnexus-mcp` fills that gap with a **reference-quality** server: an LLM agent (Claude
-Code, Cursor, VS Code, …) can inspect Nexus projects, devices, jobs, quotas and results, and — when
-explicitly permitted — compile and run circuits on the H-series emulators, all through a small, audited,
+Code, Cursor, VS Code, …) can inspect Nexus projects, devices, jobs, quotas and results, and, when
+explicitly permitted, compile and run circuits on the H-series emulators, all through a small, audited,
 safe-by-default tool surface.
 
 The ambition is that the project is good enough that **Quantinuum adopts or co-maintains it**. That is
@@ -39,10 +39,10 @@ make the handoff a single mechanical step.
 ## 2. Non-goals
 
 - **No team / role / credential management.** Near-zero legitimate agent use-case, large blast radius
-  (`qnexus` "credentials" are saved *third-party provider* secrets — IBMQ/Braket/Quantinuum logins). A
+  (`qnexus` "credentials" are saved *third-party provider* secrets: IBMQ/Braket/Quantinuum logins). A
   read-only `whoami` is the only identity surface exposed.
 - **No remote/HTTP transport in v1.** stdio only. A hosted OAuth 2.1 variant is a clean future add-on
-  (§5) — the local design must not make it hard, but it is out of scope now.
+  (§5); the local design must not make it hard, but it is out of scope now.
 - **No token handling of our own.** Auth is delegated entirely to `qnexus` (§5).
 - **No 1:1 CRUD mirror of the SDK.** We expose consolidated, workflow-level tools (auto-generating
   flat tools from an API surface, with no read/write/cost awareness, is the anti-pattern).
@@ -62,16 +62,16 @@ qnexus  ── official Python SDK  ──HTTPS──▶  Nexus cloud (projects,
 - **Language / runtime:** Python 3.10–3.13 (matches `qnexus`/`pytket`), managed with `uv`.
 - **Framework:** [FastMCP](https://github.com/jlowin/fastmcp) (2.x API surface; currently pinned to 3.x).
   Chosen because we wrap a Python SDK and it provides, out of the box: `ToolAnnotations`, `ctx.elicit()`
-  confirmation gates, structured output, `ToolError` + `mask_error_details`, and stdio + HTTP transports —
+  confirmation gates, structured output, `ToolError` + `mask_error_details`, and stdio + HTTP transports,
   letting us implement per-toolset gating declaratively in Python.
-- **Transport: stdio** — *standard input/output*, the local MCP transport: the client launches `qnexus-mcp`
+- **Transport: stdio** (*standard input/output*), the local MCP transport: the client launches `qnexus-mcp`
   as a child process and the two exchange JSON-RPC over `stdin`/`stdout` (a pipe between two programs). It is
   **not** a network service and **not** a "studio" app. The only other MCP transport is HTTP, reserved for a
   possible future hosted variant (§5). One server process per user, launched by their MCP client, so it runs
-  *as the user* and reads *their* qnexus token cache — no shared server, no shared credentials, no hosting.
-- **Client-agnostic, zero coupling:** any MCP-speaking agent can consume this server — Claude Code, Codex,
+  *as the user* and reads *their* qnexus token cache: no shared server, no shared credentials, no hosting.
+- **Client-agnostic, zero coupling:** any MCP-speaking agent can consume this server: Claude Code, Codex,
   VS Code, Cursor, or an in-house agent. `qnexus-mcp` has **no dependency on any other project**; its only
-  possible integration relationship is the inverse — another project (e.g. a larger agent platform) can *add*
+  possible integration relationship is the inverse: another project (e.g. a larger agent platform) can *add*
   this server as one of its MCP servers, exactly as any client would.
 
 ## 4. Tool catalog
@@ -91,7 +91,7 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 | | `nexus_job_status` | R | readOnly, idempotent, openWorld |
 | | `nexus_get_results` | R | readOnly, idempotent, openWorld |
 | | `nexus_job_cost` | R | readOnly, idempotent, openWorld |
-| **execute** *(opt-in)* | `nexus_estimate_cost` | R/$0 | readOnly*, openWorld — *see note |
+| **execute** *(opt-in)* | `nexus_estimate_cost` | R/$0 | readOnly*, openWorld; *see note* |
 | | `nexus_compile` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
 | | `nexus_submit` | W/$ | not-readOnly, not-destructive, **not-idempotent**, openWorld |
 | | `nexus_submit_and_wait` | W/$ | not-readOnly, not-destructive, not-idempotent, openWorld |
@@ -104,15 +104,15 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 | | `nexus_delete_project` | X | not-readOnly, **destructive**, openWorld |
 
 > **`nexus_estimate_cost` note:** `qnx.circuits.cost()` internally submits a real (free) `H2-1SC` syntax-checker
-> job and blocks on it. It spends **0** credits but is **not** a pure read — it enqueues work on the shared
-> resource — so by the read-only-strict rationale (§6) it lives in the **`execute`** toolset (opt-in), even
+> job and blocks on it. It spends **0** credits but is **not** a pure read: it enqueues work on the shared
+> resource, so by the read-only-strict rationale (§6) it lives in the **`execute`** toolset (opt-in), even
 > though it is annotated `readOnly` for UX and its docstring documents the round-trip. For the pure read of an
 > *existing* job's HQC cost use `nexus_job_cost` (`qnx.jobs.cost`), which stays in `read`.
 > **`nexus_upload_program` is QIR-only.** The SDK also exposes a HUGR upload, but its own docstring
 > warns *"HUGR support in Nexus is subject to change. Until full support is achieved any programs
-> uploaded may not work in the future"* — we will not expose an endpoint the platform itself calls
+> uploaded may not work in the future"*, so we will not expose an endpoint the platform itself calls
 > unstable. HUGR support can be added once the SDK removes that caveat.
-> `openWorldHint: true` on every tool (all touch the cloud). There is no "costs money" annotation in the MCP vocabulary — spend-but-additive
+> `openWorldHint: true` on every tool (all touch the cloud). There is no "costs money" annotation in the MCP vocabulary; spend-but-additive
 > execution is `destructive: false` yet still gated for cost server-side (§6). All submit/execute tools are
 > `idempotent: false` (each call is a new billed run); double-spend is prevented by the mandatory
 > confirmation on billable submits, not by the hint.
@@ -135,7 +135,7 @@ so we delegate 100% to `qnexus`, which owns a hardened device-code flow with ref
   nothing ourselves.
 - **Hard rules:** never read, copy, print, log, or return the token or any cookie/secret; never accept a
   raw password as a tool argument.
-- **Future remote variant:** must act as an OAuth 2.1 *resource server* — validate inbound `aud`, **never**
+- **Future remote variant:** must act as an OAuth 2.1 *resource server*: validate inbound `aud`, **never**
   pass the caller's token upstream (token-passthrough is spec-forbidden), and hold a *separate* upstream
   Nexus credential. Design the local server so this is an additive layer.
 
@@ -144,17 +144,17 @@ so we delegate 100% to `qnexus`, which owns a hardened device-code flow with ref
 Four layers, **all enforced server-side**. MCP tool annotations are UX hints only and are treated as
 untrusted; the server is the source of truth.
 
-**Layer 1 — Register-time omission.** A tool that is not permitted by the launch config
+**Layer 1: Register-time omission.** A tool that is not permitted by the launch config
 **does not appear in `tools/list` at all**. The agent cannot call what it cannot see. A single
 `is_allowed(tool)` derived from config filters the exposed set. Annotation-only gating is insufficient.
 
-**Layer 2 — Two-axis gating (a tool must pass ALL filters).**
-- *Capability axis:* `--toolsets read,execute,manage,destructive` — **default: `read`** only.
+**Layer 2: Two-axis gating (a tool must pass ALL filters).**
+- *Capability axis:* `--toolsets read,execute,manage,destructive`, **default: `read`** only.
 - *Severity axis:* `--allow-spend` (default off), `--allow-hardware` (default off), `--allow-destructive`
   (default off).
 
-**Layer 3 — Safe backend default.** The default execution backend is **`H2-1LE`** (noiseless emulator,
-**0 HQC / free**). Any billable backend — real hardware (`H2-1`, `H1-1`) or noisy emulator (`*-1E`) —
+**Layer 3: Safe backend default.** The default execution backend is **`H2-1LE`** (noiseless emulator,
+**0 HQC / free**). Any billable backend (real hardware (`H2-1`, `H1-1`) or noisy emulator (`*-1E`))
 requires `--allow-spend` **and** stays under the `--max-credits` per-call ceiling (passed to the SDK as
 `max_cost`). Billable **emulators** additionally require a passing `quotas.check_quota("simulation")`
 pre-check. Real **hardware** additionally requires `--allow-hardware`; note the qnexus SDK exposes **no
@@ -162,7 +162,7 @@ HQC-balance pre-check API** for hardware, so there the ceiling + mandatory confi
 pre-submission guards. Launch-flag gates run *before* cost estimation, so a forbidden device never even
 enqueues the (free) estimation job. `valid_check=True` is passed on submit.
 
-**Layer 4 — In-protocol confirmation (the differentiator).** Every `$` or `X` tool: estimate cost / name
+**Layer 4: In-protocol confirmation (the differentiator).** Every `$` or `X` tool: estimate cost / name
 the target resource → **`ctx.elicit()`** human confirmation *inside the protocol* → execute; refuse above
 the `--max-credits` ceiling. A deterministic **idempotency tag** labels each submission; `start_execute_job` has no server-side
 idempotency parameter, so the **mandatory confirmation on every billable submit is the real double-spend
@@ -170,7 +170,7 @@ protection** (a retry re-prompts). Shot counts are bounded to cap queue pressure
 
 **Default posture rationale (read-only strict).** Reads and executions are *not* comparable even when the
 execution is free: execution enqueues work on a shared resource (queue/network saturation, blocking waits),
-and — the subtle point — a future change, if mishandled, could turn a "free" lane into a billed one via
+and, notably, a future change, if mishandled, could turn a "free" lane into a billed one via
 drift. Read-only-by-default removes that entire class of risk. Running circuits is a deliberate opt-in
 (`--toolsets read,execute`), and even then defaults to the free `H2-1LE` lane.
 
@@ -203,7 +203,7 @@ tool-list mutation · masked errors + sanitized outputs.
 
 ## 8. Backend safety details (from verified `qnexus` v0.46.0 source)
 
-- **Free lane (default):** device names ending in `LE` — e.g. `H2-1LE` — are noiseless, **free, zero HQC**.
+- **Free lane (default):** device names ending in `LE` (e.g. `H2-1LE`) are noiseless, **free, zero HQC**.
 - **Billable:** real hardware (`H2-1`, `H1-1`) and noisy emulators (`*-1E`) spend HQCs on `execute` /
   `start_execute_job` / `retry_submission`. `compile` consumes the *time-based compilation quota*, not HQCs.
 - **Free syntax checker:** `H2-1SC`.
@@ -225,7 +225,7 @@ tool-list mutation · masked errors + sanitized outputs.
   loop-free thread).
 - All `qnexus`/network exceptions mapped to short, redacted `ToolError` messages at the client
   boundary; anything unmapped is masked by `mask_error_details`. Known case: the Nexus jobs LIST
-  endpoint can return 500s — that maps to an explicit "Nexus-side issue, do not retry in a loop"
+  endpoint can return 500s, which maps to an explicit "Nexus-side issue, do not retry in a loop"
   message rather than a hang or a cryptic failure.
 
 ## 10. Repo layout & packaging (adoptable-grade)
@@ -235,7 +235,7 @@ qnexus-mcp/
   LICENSE                      # Apache-2.0
   NOTICE                       # attribution + non-affiliation / nominative trademark use
   README.md                    # uvx install + copy-paste mcpServers config + disclaimer + `mcp-name:` marker
-  SECURITY.md                  # private disclosure (qnexus has none — we exceed)
+  SECURITY.md                  # private disclosure (qnexus has none; we exceed)
   CONTRIBUTING.md              # DCO sign-off (NOT a CLA)
   CODE_OF_CONDUCT.md           # Contributor Covenant
   CHANGELOG.md                 # Commitizen-generated
@@ -279,7 +279,7 @@ qnexus-mcp/
 
 ## 11. Distribution & publishing
 
-1. **PyPI** as `qnexus-mcp`, via **Trusted Publishing (OIDC in GitHub Actions)** — no static token. Runs
+1. **PyPI** as `qnexus-mcp`, via **Trusted Publishing (OIDC in GitHub Actions)**; no static token. Runs
    via `uvx qnexus-mcp`.
 2. **PyPI ownership proof for the registry:** `<!-- mcp-name: io.github.<owner>/qnexus-mcp -->` in the README.
 3. **MCP Registry:** `mcp-publisher` → `server.json` (`name = io.github.<owner>/qnexus-mcp` matching the
@@ -287,12 +287,12 @@ qnexus-mcp/
    `environmentVariables` for the toolset/gate flags). `mcp-publisher login github` (device-code) grants
    the `io.github.*` namespace. Automate re-publish on release.
 4. **Namespace = honesty signal.** `io.github.<owner>/*` = community. `com.quantinuum.*` requires DNS/TXT
-   proof of `quantinuum.com` — only Quantinuum can claim it, which *is* the adoption handoff.
+   proof of `quantinuum.com`; only Quantinuum can claim it, which *is* the adoption handoff.
 5. **Client configs:** ship copy-paste `.mcp.json` / Claude Code / Cursor / VS Code snippets.
 
 ## 12. Testing strategy
 
-- **Unit (qnexus mocked):** tool schemas; arg validation; **guardrail logic** — e.g. `submit` refuses without
+- **Unit (qnexus mocked):** tool schemas; arg validation; **guardrail logic**, e.g. `submit` refuses without
   `elicit` confirmation; refuses a billable backend without `--allow-spend`; refuses above `max_cost`;
   destructive tools absent from `tools/list` without `--allow-destructive`.
 - **Snapshot test** of the full tool catalog (names, descriptions, annotations, input schemas) so the
@@ -311,17 +311,17 @@ Kept for the record:
 1. Docs API index is **stale vs code**: `login_no_interaction` is `qnx.auth.login_no_interaction` (not
    top-level); `login_with_token` *is* top-level. (We use neither for login, but confirm `is_logged_in`.)
 2. Canonical device strings are `H2-1E` / `H2-1LE` / `H2-1SC` / `H2-1` (+ H1 analogues); a doc summary's
-   `"H2-Emulator"` is unverified — **confirm the exact free-emulator string live** before defaulting to it.
+   `"H2-Emulator"` is unverified; **confirm the exact free-emulator string live** before defaulting to it.
 3. Confirm exact signatures/kwargs of `CircuitRef.download_circuit()`,
    `CompilationResultRef.get_output()`, `ExecutionResultRef.download_result()` before wiring results.
 4. Confirm `qnx.circuits.cost()` behavior (blocking free `H2-1SC` job) on the event's actual account.
-5. Confirm the token-cache path (`~/.qnx/auth/`) — **the design deliberately never depends on it**, but the
+5. Confirm the token-cache path (`~/.qnx/auth/`): **the design deliberately never depends on it**, but the
    `nexus_auth_status` guidance message should be accurate.
 
 ## 14. Path to official (honest)
 
 No documented case exists of a *community-built* MCP server being taken over and rebranded as a vendor's
-official one — the known official servers were first-party from day one. So the
+official one; the known official servers were first-party from day one. So the
 realistic route is: **build to first-party quality → gain traction + registry listings (+ real use during
 the Quantathon) → propose Quantinuum adopt/co-maintain.** Adoption is earned. The design keeps the handoff
 to a single mechanical step (re-namespacing `io.github.*` → `com.quantinuum.*`). Signals that maximize the
@@ -331,17 +331,17 @@ odds: identical Apache-2.0 license, DCO (not CLA) IP cleanliness, dependence onl
 ## 15. Milestones
 
 **Status (2026-07-21): M0–M4 DONE and committed; read + execute paths verified live against real Nexus
-(Bell state on `H2-1LE`). M5 (public flip + first release) pending — it needs the maintainer's explicit
+(Bell state on `H2-1LE`). M5 (public flip + first release) pending; it needs the maintainer's explicit
 go-ahead.**
 
-- **M0 — Repo hygiene (public-ready first commit):** LICENSE, NOTICE, README + disclaimer, SECURITY,
+- **M0: Repo hygiene (public-ready first commit):** LICENSE, NOTICE, README + disclaimer, SECURITY,
   CONTRIBUTING (DCO), CoC, CI skeleton, `pyproject`. No secrets. *(Gate before the repo is made public.)*
-- **M1 — Read toolset + auth status + permission scaffolding** (register-time omission, config surface).
-- **M2 — `execute` toolset** (compile, submit to free `H2-1LE`, submit_and_wait) with in-protocol
+- **M1: Read toolset + auth status + permission scaffolding** (register-time omission, config surface).
+- **M2: `execute` toolset** (compile, submit to free `H2-1LE`, submit_and_wait) with in-protocol
   confirmation, `max_cost`, quota pre-check, idempotency.
-- **M3 — `manage` + `destructive` toolsets** behind their gates.
-- **M4 — Packaging & publishing** (PyPI OIDC, `server.json`, registry, client-config snippets).
-- **M5 — Public flip + Quantathon rollout** (announce, invite participants to install).
+- **M3: `manage` + `destructive` toolsets** behind their gates.
+- **M4: Packaging & publishing** (PyPI OIDC, `server.json`, registry, client-config snippets).
+- **M5: Public flip + Quantathon rollout** (announce, invite participants to install).
 
 ## 16. Sources
 

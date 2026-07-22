@@ -141,7 +141,7 @@ def _tool_error(exc: Exception) -> ToolError | None:
     if isinstance(exc, qnx_exc.JobError):
         return ToolError(
             f"Nexus job failed: {detail(exc)}. Check nexus_job_status for detail before "
-            "deciding whether to resubmit — do not resubmit unchanged."
+            "deciding whether to resubmit; do not resubmit unchanged."
         )
     if isinstance(
         exc,
@@ -156,13 +156,13 @@ def _tool_error(exc: Exception) -> ToolError | None:
         if isinstance(status, int) and status >= 500:
             return ToolError(
                 f"Nexus returned a server error ({status}). This is a Nexus-side issue, not a "
-                "problem with your request — do not retry in a loop; try again later. "
+                "problem with your request; do not retry in a loop, try again later. "
                 "Other endpoints (e.g. job status by id) may still work."
             )
         return ToolError(f"Nexus rejected the request (HTTP {status}): {detail(exc)}")
     if isinstance(exc, httpx.TimeoutException):
         return ToolError(
-            "The request to Nexus timed out. The service may be slow or unreachable — "
+            "The request to Nexus timed out. The service may be slow or unreachable. "
             "retry once; if it persists, stop and report the outage to the user."
         )
     if isinstance(exc, httpx.HTTPError):
@@ -229,7 +229,7 @@ class QnexusClient:
     @_mapped
     def list_devices(self) -> list[dict[str, Any]]:
         # devices.get_all() rows carry a raw pytket BackendInfo (architecture graph,
-        # OpType gate-set) that pydantic can't serialize to JSON — that silently drops
+        # OpType gate-set) that pydantic can't serialize to JSON, which silently drops
         # MCP structured_content, which a strict client then rejects as a schema
         # violation (found live: nexus_list_devices via a real stdio MCP round-trip).
         # Surface only the plain, agent-useful fields instead of the raw SDK object.
@@ -401,7 +401,7 @@ class QnexusClient:
         except (TimeoutError, asyncio.TimeoutError):
             raise ToolError(
                 f"Timed out after {timeout}s waiting for job {job_id}. The job is still running "
-                "on Nexus — do not resubmit; poll nexus_job_status and fetch nexus_get_results "
+                "on Nexus. Do not resubmit; poll nexus_job_status and fetch nexus_get_results "
                 "when it is COMPLETED."
             ) from None
         refs = qnx.jobs.results(job)
@@ -453,7 +453,7 @@ class QnexusClient:
         return out
 
     # --- destructive (opt-in via --toolsets destructive + --allow-destructive) ----------------
-    # Project targets resolve via projects.get(name=...) — the SDK's EXACT-match filter
+    # Project targets resolve via projects.get(name=...): the SDK's EXACT-match filter
     # (name_exact server-side) which raises ZeroMatches / NoUniqueMatch instead of guessing.
     # Never use name_like (substring) here: it could resolve the wrong project.
 

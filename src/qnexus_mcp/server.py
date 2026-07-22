@@ -15,36 +15,36 @@ from .tools import ALL_SPECS
 
 _INSTRUCTIONS = """\
 General policy: every tool error already tells you what to do next (retry, wait, ask the human, or
-stop) — read it fully before deciding your next move. Do not retry the same call in a loop; a
+stop): read it fully before deciding your next move. Do not retry the same call in a loop; a
 message that doesn't say "retry" means don't.
 
 Auth: at the start of any task that touches Nexus, call `nexus_auth_status` as your very first
-tool call — alone, before any other Nexus tool, even ones that feel like reasonable first steps
+tool call, alone, before any other Nexus tool, even ones that feel like reasonable first steps
 (checking device status, estimating cost, listing resources). Wait for its result before doing
 anything else. This is unconditional: it costs nothing, and every other Nexus call fails
 identically until auth is resolved, so checking first is strictly better than finding out via a
 failed device/cost/list call. If `logged_in` is false, tell the user to run `qnx login` in their
 own terminal (it opens their browser) and stop there. Never ask the user for their Nexus username
-or password, and never attempt to run `qnx login`/`qnx logout` yourself — this server never
+or password, and never attempt to run `qnx login`/`qnx logout` yourself: this server never
 handles Nexus credentials, by design; login is a human-initiated, out-of-band step every time.
 
-Guard errors (spend/hardware/destructive/project) split into two kinds — tell them apart:
+Guard errors (spend/hardware/destructive/project) split into two kinds: tell them apart:
   - Fixable by you, no human needed: a project rejected by --projects names the allowed set
-    directly in its message — retry with one of those. A "no match" / "ambiguous match" error on
+    directly in its message; retry with one of those. A "no match" / "ambiguous match" error on
     a job or project means list first (`nexus_list_jobs`/`nexus_list_projects`) and retry with a
-    corrected, exact name or id — never guess.
+    corrected, exact name or id; never guess.
   - Requires the human, don't retry: "--allow-spend" / "--allow-hardware" / "--allow-destructive"
-    / quota-exhausted errors mean the *server* was launched without that capability — you cannot
+    / quota-exhausted errors mean the *server* was launched without that capability; you cannot
     enable it yourself. Explain this plainly and stop; only the human can restart the server with
     different flags. Likewise, if the user declines an in-protocol confirmation (spend or
-    destructive), treat that as their answer — do not immediately re-prompt.
+    destructive), treat that as their answer; do not immediately re-prompt.
 
 Known-flaky endpoint: `nexus_list_jobs` occasionally returns a Nexus-side server error unrelated
 to your request. If it fails, use `nexus_job_status`/`nexus_get_results` by id instead of retrying
 the list.
 
 Submissions are not truly idempotent (the name tag is cosmetic). If a submit's outcome is unclear
-— e.g. the call itself timed out — check `nexus_list_jobs`/`nexus_job_status` before resubmitting,
+(e.g. the call itself timed out), check `nexus_list_jobs`/`nexus_job_status` before resubmitting,
 to avoid an unintended duplicate job or double-spend.
 
 Typical flow to run a circuit: `nexus_auth_status` -> `nexus_list_devices` (or just use the free

@@ -1,4 +1,4 @@
-"""qnexus-mcp — a community MCP server for Quantinuum Nexus.
+"""qnexus-mcp: a community MCP server for Quantinuum Nexus.
 
 Not affiliated with, endorsed by, or an official product of Quantinuum.
 """

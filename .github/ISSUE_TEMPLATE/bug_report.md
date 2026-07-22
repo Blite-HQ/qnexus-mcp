@@ -16,4 +16,4 @@ labels: bug
 <!-- OS, Python version, `qnexus-mcp` version, qnexus SDK version. -->
 
 **Never paste tokens, cookies, or the contents of `~/.qnx`.** If this is a security issue, do NOT open
-an issue — use the private reporting flow in [SECURITY.md](../../SECURITY.md).
+an issue; use the private reporting flow in [SECURITY.md](../../SECURITY.md).

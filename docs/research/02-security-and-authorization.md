@@ -1,4 +1,4 @@
-# 02 — Security & authorization: how MCP servers protect themselves
+# 02: Security & authorization: how MCP servers protect themselves
 
 **Researched 2026-07-20.** Sources: the MCP authorization & security-best-practices spec pages (revisions
 2025-06-18 and 2025-11-25), the relevant IETF RFCs, and the public MCP-security literature. Full source
@@ -41,9 +41,9 @@ both authorization and token requests); **RFC 9728 Protected Resource Metadata**
 (or OIDC); **audience validation** (the server MUST verify tokens were issued for *it*, RFC 9068 `aud`);
 HTTPS everywhere; short-lived tokens with refresh rotation; least-privilege `scopes_supported`.
 
-**Should we ever handle tokens ourselves? No — not for the local server.** (1) the spec says stdio servers
+**Should we ever handle tokens ourselves? No, not for the local server.** (1) the spec says stdio servers
 SHOULD NOT; (2) `qnexus` already owns a hardened flow (we inherit refresh/rotation/revocation); (3) every
-place code touches a token is a leak surface — the safest token is one our code never reads; (4) as a
+place code touches a token is a leak surface: the safest token is one our code never reads; (4) as a
 widely-installed binary next to a live spend credential, we minimize what we hold. The **only** exception is
 a future remote variant, which must validate inbound `aud`, **never** pass the caller's token upstream, and
 hold a **separate** upstream Nexus credential.
@@ -58,11 +58,11 @@ page and the public literature (Invariant Labs, Trail of Bits, CyberArk, Simon W
 - **Prompt injection → tool poisoning.** Malicious instructions hidden in a tool's `description`/`inputSchema`
   enter the LLM's context at `tools/list` **before any tool is called** ("line jumping", Trail of Bits). An
   Invariant Labs PoC used a poisoned description to exfiltrate `~/.ssh/id_rsa`. Injection also arrives via
-  tool **inputs** (a job name, an uploaded file) and — per CyberArk's "poison everywhere" — via tool
+  tool **inputs** (a job name, an uploaded file) and, per CyberArk's "poison everywhere", via tool
   **outputs** the model then acts on.
 - **Confused deputy.** The server holds the user's full authority; a lower-trust LLM drives it into actions
   the user never intended. OAuth proxies with static client IDs + DCR + consent cookies can also leak auth codes.
-- **Token passthrough.** Forwarding a client-supplied token straight to the downstream API — **explicitly
+- **Token passthrough.** Forwarding a client-supplied token straight to the downstream API, **explicitly
   forbidden** by the spec ("MUST NOT accept any tokens that were not explicitly issued for the MCP server");
   it breaks rate-limits, audit trails, and trust boundaries.
 - **Rug pull.** A tool's description mutates *after* the user approved it (via `notifications/tools/list_changed`).
@@ -109,32 +109,32 @@ page and the public literature (Invariant Labs, Trail of Bits, CyberArk, Simon W
 - **Auditability:** structured audit log of every call (tool, sanitized args, backend, estimated cost,
   decision, status) with secrets redacted; local only.
 
-## Tool annotations — a permission *signal*, not a control
+## Tool annotations: a permission *signal*, not a control
 
 All four annotations are **hints**; the spec: *"clients MUST treat them as untrusted unless from a trusted
 server."* We set them honestly so trusted-server clients (Claude Code, etc.) render the right consent and
 parallelism UX (Claude Code runs `readOnlyHint:true` tools concurrently; `destructiveHint:true` triggers a
-confirmation dialog) — but the real control is always server-side.
+confirmation dialog), but the real control is always server-side.
 
 | Meaning | Default |
 |---|---|
-| `readOnlyHint` — does not modify its environment | `false` |
-| `destructiveHint` — modification may be destructive (only meaningful when not read-only) | `true` |
-| `idempotentHint` — repeat call has no additional effect | `false` |
-| `openWorldHint` — interacts with an open world of external entities | `true` |
+| `readOnlyHint`: does not modify its environment | `false` |
+| `destructiveHint`: modification may be destructive (only meaningful when not read-only) | `true` |
+| `idempotentHint`: repeat call has no additional effect | `false` |
+| `openWorldHint`: interacts with an open world of external entities | `true` |
 
-Because the defaults are conservative, **omitting** annotations makes every tool look destructive/external —
+Because the defaults are conservative, **omitting** annotations makes every tool look destructive/external,
 so annotate deliberately. Every `qnexus-mcp` tool talks to the cloud → **`openWorldHint: true` everywhere.**
-There is **no "costs money" annotation** — mark spend-but-additive execution `destructiveHint:false` yet
+There is **no "costs money" annotation**: mark spend-but-additive execution `destructiveHint:false` yet
 still gate it server-side for cost; set `idempotentHint:false` on all submit/execute tools (each call is a
 new billed run) and make *retries* safe with idempotency keys instead of lying about idempotency.
 
 ---
 
 ## Caveats / verification flags
-- The Security Best Practices page is living content; some sections post-date the 2025-06-18 freeze —
+- The Security Best Practices page is living content; some sections post-date the 2025-06-18 freeze;
   re-check the dated URL before shipping.
-- Annotations are advisory only — any claim that an annotation *enforces* anything is wrong.
+- Annotations are advisory only; any claim that an annotation *enforces* anything is wrong.
 - The exact `qnexus` token-cache path/env var could not be pinned from primary docs in this pass; the design
   **deliberately never depends on it**.
 

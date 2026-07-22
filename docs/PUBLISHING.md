@@ -1,11 +1,11 @@
 # Publishing `qnexus-mcp`
 
 Distribution has three parts: **PyPI** (the installable package), the **MCP Registry** (discovery
-metadata), and the **public GitHub repo**. Publishing to PyPI makes the code downloadable — treat it as
+metadata), and the **public GitHub repo**. Publishing to PyPI makes the code downloadable; treat it as
 part of "going public" (the M5 flip), not before.
 
 The [`Publish` workflow](../.github/workflows/publish.yml) automates PyPI + registry on a GitHub Release.
-It uses **Trusted Publishing (OIDC)** — no API tokens are stored anywhere.
+It uses **Trusted Publishing (OIDC)**; no API tokens are stored anywhere.
 
 ## One-time setup (a maintainer, once)
 
@@ -30,7 +30,7 @@ the workflow runs (or via `mcp-publisher login github` for a manual publish). No
 ## Cut the FIRST release (v0.1.0)
 
 `cz bump` needs an existing tag to work from (with none it would compute v0.2.0 from the feat commits).
-The first release is therefore manual — and the version files already say `0.1.0`:
+The first release is therefore manual, and the version files already say `0.1.0`:
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.1.0] - YYYY-MM-DD` (today's date) and add a
    fresh empty `## [Unreleased]` above it. Commit.
@@ -62,7 +62,7 @@ The first release is therefore manual — and the version files already say `0.1
    ```bash
    gh repo edit Blite-HQ/qnexus-mcp --visibility public --accept-visibility-change-consequences
    ```
-3. **Immediately** harden repo settings — GitHub blocks branch protection, secret scanning, and push
+3. **Immediately** harden repo settings: GitHub blocks branch protection, secret scanning, and push
    protection on a private repo under the Free plan (confirmed: 403 "Upgrade to GitHub Pro or make this
    repository public"), so none of this can be pre-configured; it becomes available the instant the repo
    flips. One script closes the gap:
@@ -70,7 +70,7 @@ The first release is therefore manual — and the version files already say `0.1
    ./scripts/post-flip-harden.sh
    ```
    Enables secret scanning + push protection, Dependabot vulnerability alerts, and branch protection on
-   `main` (required CI status checks, no force-push, no deletion). Does not force a PR-only workflow —
+   `main` (required CI status checks, no force-push, no deletion). Does not force a PR-only workflow;
    tighten with required reviews once there are other contributors.
 4. Cut the first release (above) → PyPI + registry.
 5. Announce to Quantathon participants: `uvx qnexus-mcp` plus the `mcpServers` snippet from the README.

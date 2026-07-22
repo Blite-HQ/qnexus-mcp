@@ -1,6 +1,6 @@
 name: Publish
 
-# Publishes to PyPI via Trusted Publishing (OIDC — no API token) when a GitHub Release is published,
+# Publishes to PyPI via Trusted Publishing (OIDC, no API token) when a GitHub Release is published,
 # then re-publishes the MCP registry entry. Requires (one-time, by a maintainer):
 #   - a PyPI "pending publisher" for `qnexus-mcp` pointing at Blite-HQ/qnexus-mcp / publish.yml / env `pypi`
 #   - a GitHub Environment named `pypi`

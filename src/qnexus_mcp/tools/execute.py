@@ -1,6 +1,6 @@
 """Execute tools (opt-in via `--toolsets execute`).
 
-Spend is NOT gated at registration — the same submit tool serves the free `H2-1LE` emulator and
+Spend is NOT gated at registration: the same submit tool serves the free `H2-1LE` emulator and
 billable devices. Billable calls are gated at runtime by SpendGuard: `--allow-spend`, (hardware)
 `--allow-hardware`, a `--max-credits` ceiling, a "simulation" quota pre-check (emulators), and an
 in-protocol `ctx.elicit` confirmation. All submissions are rate-limited and serialized.

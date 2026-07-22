@@ -17,7 +17,7 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 - **Manage toolset** (`--toolsets manage`): `nexus_create_project`, `nexus_upload_circuit`,
   `nexus_upload_program` (QIR).
 - **Destructive toolset** (`--toolsets destructive` + `--allow-destructive`): `nexus_cancel_job`,
-  `nexus_delete_job`, `nexus_archive_project`, `nexus_delete_project` — each behind an in-protocol
+  `nexus_delete_job`, `nexus_archive_project`, `nexus_delete_project`, each behind an in-protocol
   confirmation that names the exact target.
 - Server-side permission gating with **register-time omission**; read-only by default.
 - `--projects` / `QNEXUS_MCP_PROJECTS` project allowlist, enforced on every mutating tool.
@@ -32,7 +32,7 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 - Authentication is delegated entirely to `qnexus`; the server never reads, stores, logs, or returns the
   Nexus token.
 - Destructive project operations resolve their target by **exact** name via the SDK's unique-match
-  lookup — an ambiguous or missing name aborts instead of acting.
+  lookup; an ambiguous or missing name aborts instead of acting.
 - Blocking SDK calls run in worker threads with bounded waits (default 300 s), so a slow or hung Nexus
   call can never freeze the server or hang the session.
 - CI/publish workflows run with least-privilege tokens and actions pinned to commit SHAs; releases

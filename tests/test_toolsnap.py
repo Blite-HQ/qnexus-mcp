@@ -34,7 +34,7 @@ def test_tool_catalog_matches_snapshot(fake_client):
     if os.environ.get("UPDATE_SNAPSHOTS") == "1":
         SNAPSHOT.parent.mkdir(exist_ok=True)
         SNAPSHOT.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n")
-    assert SNAPSHOT.exists(), "snapshot missing — run once with UPDATE_SNAPSHOTS=1"
+    assert SNAPSHOT.exists(), "snapshot missing; run once with UPDATE_SNAPSHOTS=1"
     assert catalog == json.loads(SNAPSHOT.read_text()), (
         "the agent-facing tool catalog changed; if intentional, regenerate the snapshot "
         "(UPDATE_SNAPSHOTS=1) and review the diff"

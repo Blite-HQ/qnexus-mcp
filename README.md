@@ -2,7 +2,7 @@
 
 A community [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for **Quantinuum Nexus**,
 wrapping the official [`qnexus`](https://github.com/Quantinuum/qnexus) Python SDK so any MCP-speaking agent
-(Claude Code, Cursor, VS Code, Codex, …) can inspect Nexus and — opt-in — run circuits on the free emulator.
+(Claude Code, Cursor, VS Code, Codex, …) can inspect Nexus and, opt-in, run circuits on the free emulator.
 
 > **Not affiliated with, endorsed by, or an official product of Quantinuum.** "Quantinuum" and "Nexus" are
 > trademarks of their respective owners, used here nominatively to describe compatibility.
@@ -30,7 +30,7 @@ uvx qnexus-mcp
 qnx login
 ```
 
-Inside Nexus JupyterHub, authentication is automatic — do not run `qnx login` there.
+Inside Nexus JupyterHub, authentication is automatic; do not run `qnx login` there.
 
 ## Configure your MCP client
 
@@ -77,7 +77,7 @@ only. See [`docs/DESIGN.md`](docs/DESIGN.md) §6–§7.
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Contributions are accepted under the
-[Developer Certificate of Origin](https://developercertificate.org/) — sign off your commits with `-s`.
+[Developer Certificate of Origin](https://developercertificate.org/); sign off your commits with `-s`.
 
 ## License
 

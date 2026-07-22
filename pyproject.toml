@@ -9,7 +9,7 @@ license-files = ["LICENSE", "NOTICE"]
 keywords = ["mcp", "model-context-protocol", "quantinuum", "nexus", "qnexus", "quantum"]
 # Runtime deps are capped: `uvx qnexus-mcp` resolves fresh on every user install (uv.lock does not
 # apply to published wheels), so an untested fastmcp/qnexus major or minor must never be pulled in
-# silently. qnexus is 0.x — under SemVer its minors may break — so it is capped per-minor and bumped
+# silently. qnexus is 0.x; under SemVer its minors may break, so it is capped per-minor and bumped
 # deliberately (Dependabot opens the PR; CI + the live smoke validate it).
 dependencies = [
     "fastmcp>=3.4,<4",

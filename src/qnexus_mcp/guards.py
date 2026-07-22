@@ -1,4 +1,4 @@
-"""Server-side spend/destructive guards. The real controls — annotations are only UX hints."""
+"""Server-side spend/destructive guards (the real controls; annotations are only UX hints)."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class SubmitRateLimiter:
         if len(self._stamps) >= self._max:
             raise RateLimited(
                 f"Rate limit: at most {self._max} submissions per minute. "
-                "Wait before submitting again — do not retry in a loop."
+                "Wait before submitting again; do not retry in a loop."
             )
         self._stamps.append(t)
 
@@ -107,7 +107,7 @@ class SpendGuard:
         """Allow, or raise SpendDenied. Free devices (H2-1LE / *-1SC) pass with no gate.
 
         For billable emulators the "simulation" quota is pre-checked (when a checker is supplied).
-        Real hardware has no balance-check API in the qnexus SDK — the ceiling + confirmation are
+        Real hardware has no balance-check API in the qnexus SDK, so the ceiling + confirmation are
         the only pre-submission guards there.
         """
         if not is_billable(device):
