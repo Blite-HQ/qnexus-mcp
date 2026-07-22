@@ -34,12 +34,14 @@ _SECRET_VALUE_RE = re.compile(
     r"(eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,})"  # JWT
     r"|(bearer\s+\S+)"  # Bearer <token>
     r"|(myqos\w*)"  # Quantinuum session cookies
-    r"|(ghp_[A-Za-z0-9]{20,})"  # GitHub classic PAT
-    r"|(github_pat_[A-Za-z0-9_]{20,})"  # GitHub fine-grained PAT
-    r"|(xox[baprs]-[A-Za-z0-9-]{10,})"  # Slack tokens
-    r"|(sk-[A-Za-z0-9_-]{20,})"  # sk- API keys (OpenAI/Anthropic style)
-    r"|(sk_(?:live|test)_[A-Za-z0-9]{10,})"  # Stripe secret keys
-    r"|(AKIA[0-9A-Z]{16})"  # AWS access key id
+    # Prefixed token shapes below require a non-alphanumeric boundary before the prefix, so
+    # kebab-case names like "flask-application-server" or "risk-assessment-run" never match.
+    r"|((?<![A-Za-z0-9])ghp_[A-Za-z0-9]{20,})"  # GitHub classic PAT
+    r"|((?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,})"  # GitHub fine-grained PAT
+    r"|((?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,})"  # Slack tokens
+    r"|((?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,})"  # sk- API keys (OpenAI/Anthropic style)
+    r"|((?<![A-Za-z0-9])sk_(?:live|test)_[A-Za-z0-9]{10,})"  # Stripe secret keys
+    r"|((?<![A-Za-z0-9])AKIA[0-9A-Z]{16})"  # AWS access key id
     r"|((?:api[_-]?key|token|secret|passwd|password|credential)\s*[=:]\s*\S{8,})",  # key=value
     re.IGNORECASE,
 )

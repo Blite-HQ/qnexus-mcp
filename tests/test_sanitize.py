@@ -83,3 +83,19 @@ def test_keeps_qasm_source_text():
 
 def test_keeps_short_sk_prefixed_words():
     assert redact("sk-limit") == "sk-limit"
+
+
+def test_keeps_kebab_case_names_containing_sk():
+    # Regression: words ending in "sk" (task/risk/flask/desk) followed by a long kebab-case
+    # suffix must not be mistaken for sk- API keys -- these are realistic job/project names.
+    for name in (
+        "flask-application-server-2026",
+        "risk-assessment-sweep-run-3",
+        "task-scheduler-experiments-v2",
+        "desk-check-bell-state-experiment",
+    ):
+        assert redact(name) == name
+
+
+def test_still_redacts_standalone_sk_key_inside_text():
+    assert redact("submitted with key sk-abcdefghijklmnopqrstuvwx by mistake") == "***"
