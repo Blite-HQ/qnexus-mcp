@@ -43,6 +43,9 @@ class NexusClient(Protocol):
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
     def get_results(self, job_id: str) -> dict[str, Any]: ...
     def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float: ...
+    def estimate_cost_batch(
+        self, circuits: list[str], n_shots: list[int], device: str
+    ) -> float: ...
     def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]: ...
     def submit(
         self,
@@ -51,6 +54,15 @@ class NexusClient(Protocol):
         device: str,
         project: str | None = None,
         max_cost: float | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]: ...
+    def submit_batch(
+        self,
+        circuits: list[str],
+        n_shots: list[int],
+        device: str,
+        project: str | None = None,
+        max_cost: list[float] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]: ...
@@ -325,24 +337,46 @@ class QnexusClient:
     # --- execute path (verified live at the M2.2 smoke) ---------------------------------------
 
     def _upload(self, qnx: Any, circuit: str, project: str | None) -> tuple[Any, Any]:
-        circ = _parse_qasm(circuit)
+        circ_refs, project_ref = self._upload_many(qnx, [circuit], project)
+        return circ_refs[0], project_ref
+
+    def _upload_many(
+        self, qnx: Any, circuits: list[str], project: str | None
+    ) -> tuple[list[Any], Any]:
         project_ref = qnx.projects.get_or_create(name=project or DEFAULT_PROJECT)
-        circ_ref = qnx.circuits.upload(circuit=circ, name="qnexus-mcp-circuit", project=project_ref)
-        return circ_ref, project_ref
+        circ_refs = [
+            qnx.circuits.upload(
+                circuit=_parse_qasm(circuit), name="qnexus-mcp-circuit", project=project_ref
+            )
+            for circuit in circuits
+        ]
+        return circ_refs, project_ref
+
+    @staticmethod
+    def _require_estimate(cost: Any, device: str) -> float:
+        """Never let a missing estimate read as "0 HQC": the --max-credits gate and the user's
+        confirmation would both be based on a fiction. Refuse instead."""
+        if cost is None and is_billable(device):
+            raise ToolError(
+                f"Nexus returned no cost estimate for {device}; refusing to treat that as free. "
+                "Retry, or use the free H2-1LE emulator."
+            )
+        return float(cost or 0.0)
 
     @_mapped
     def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float:
         qnx = _qnx()
         circ_ref, _ = self._upload(qnx, circuit, None)
         cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
-        if cost is None and is_billable(device):
-            # Never let a missing estimate read as "0 HQC": the --max-credits gate and the user's
-            # confirmation would both be based on a fiction. Refuse instead.
-            raise ToolError(
-                f"Nexus returned no cost estimate for {device}; refusing to treat that as free. "
-                "Retry, or use the free H2-1LE emulator."
-            )
-        return float(cost or 0.0)
+        return self._require_estimate(cost, device)
+
+    @_mapped
+    def estimate_cost_batch(self, circuits: list[str], n_shots: list[int], device: str) -> float:
+        """Aggregate HQC estimate for a batch (circuits.cost accepts lists, returns one total)."""
+        qnx = _qnx()
+        circ_refs, _ = self._upload_many(qnx, circuits, None)
+        cost = qnx.circuits.cost(circ_refs, n_shots, qnx.QuantinuumConfig(device_name=device))
+        return self._require_estimate(cost, device)
 
     @_mapped
     def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]:
@@ -388,6 +422,41 @@ class QnexusClient:
             valid_check=True,
         )
         out: dict[str, Any] = redact({"job_id": str(job.id), "device": device})
+        return out
+
+    @_mapped
+    def submit_batch(
+        self,
+        circuits: list[str],
+        n_shots: list[int],
+        device: str,
+        project: str | None = None,
+        max_cost: list[float] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Submit N circuits as ONE Nexus job with N items (per-item n_shots and max_cost)."""
+        qnx = _qnx()
+        circ_refs, project_ref = self._upload_many(qnx, circuits, project)
+        config = qnx.QuantinuumConfig(device_name=device)
+        tag = idempotency_key or "job"
+        compiled = qnx.compile(
+            programs=circ_refs,
+            backend_config=config,
+            name=f"qnexus-mcp-compile-{tag}",
+            project=project_ref,
+        )
+        job = qnx.start_execute_job(
+            programs=list(compiled),
+            n_shots=n_shots,
+            backend_config=config,
+            name=f"qnexus-mcp-{tag}",
+            project=project_ref,
+            max_cost=max_cost if max_cost is not None else [],
+            valid_check=True,
+        )
+        out: dict[str, Any] = redact(
+            {"job_id": str(job.id), "device": device, "n_circuits": len(circuits)}
+        )
         return out
 
     # --- manage (opt-in via --toolsets manage) ------------------------------------------------

@@ -62,6 +62,24 @@ def test_idempotency_key_is_stable():
     assert g.idempotency_key({"b": 2, "a": 1}) == g.idempotency_key({"a": 1, "b": 2})
 
 
+async def test_confirmation_message_uses_custom_action():
+    messages = []
+
+    async def confirm(msg):
+        messages.append(msg)
+        return True
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=10.0)
+    await SpendGuard(cfg).check_and_confirm(
+        device="H2-1E",
+        estimated_cost=5.0,
+        confirm=confirm,
+        action="Submit 3 circuits x 10 shots to H2-1E as one batch job?",
+    )
+    assert "3 circuits" in messages[0]
+    assert "ceiling 10.0" in messages[0]
+
+
 # --- batch-aware, configurable rate limiting --------------------------------------------------
 
 

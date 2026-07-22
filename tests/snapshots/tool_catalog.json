@@ -571,6 +571,58 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
+    "description": "Submit up to 20 QASM circuits as one multi-item Nexus job (e.g. a parameter sweep).\n\n`n_shots` applies to each circuit; per-circuit results come back in submission order via\nnexus_get_results. Defaults to the free H2-1LE emulator. Billable devices require\n--allow-spend (and --allow-hardware for hardware), an aggregate estimate under\n--max-credits, and ONE explicit confirmation for the whole batch. Every circuit counts\nagainst the submission rate limit.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "circuits": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "type": "array"
+        },
+        "device": {
+          "default": "H2-1LE",
+          "type": "string"
+        },
+        "n_shots": {
+          "default": 100,
+          "maximum": 100000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "circuits"
+      ],
+      "type": "object"
+    },
+    "name": "nexus_submit_batch",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
     "description": "Upload an OpenQASM 2 circuit to a project for later reuse.",
     "inputSchema": {
       "additionalProperties": false,

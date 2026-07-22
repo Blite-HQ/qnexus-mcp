@@ -6,9 +6,15 @@ from fastmcp.exceptions import ToolError
 
 from qnexus_mcp.config import ServerConfig
 from qnexus_mcp.context import bind_state
-from qnexus_mcp.guards import SpendDenied
+from qnexus_mcp.guards import ProjectDenied, RateLimited, SpendDenied
 from qnexus_mcp.server import build_server
-from qnexus_mcp.tools.execute import EXECUTE_SPECS, nexus_submit, nexus_submit_and_wait
+from qnexus_mcp.tools.execute import (
+    EXECUTE_SPECS,
+    MAX_BATCH_SIZE,
+    nexus_submit,
+    nexus_submit_and_wait,
+    nexus_submit_batch,
+)
 
 
 class _Elicit:
@@ -67,9 +73,91 @@ def test_execute_specs_shape():
         "nexus_estimate_cost",
         "nexus_compile",
         "nexus_submit",
+        "nexus_submit_batch",
         "nexus_submit_and_wait",
     }
     assert all(s.toolset == "execute" and not s.read_only for s in EXECUTE_SPECS)
+    by_name = {s.name: s for s in EXECUTE_SPECS}
+    assert by_name["nexus_submit_batch"].is_spend
+
+
+# --- batch submission (audit finding #2) ------------------------------------------------------
+
+
+class _NoElicit:
+    """Fails the test if any confirmation is requested."""
+
+    async def __call__(self, message, response_type=bool):
+        raise AssertionError(f"unexpected confirmation prompt: {message}")
+
+
+async def test_submit_batch_free_device_needs_no_confirmation(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}))
+    out = await nexus_submit_batch(
+        _ctx(fake_client, cfg, elicit=_NoElicit()), circuits=["a", "b", "c"], n_shots=10
+    )
+    assert out["job_id"] == "j-batch"
+    assert out["n_circuits"] == 3
+
+
+async def test_submit_batch_single_confirmation_mentions_count_shots_and_aggregate_cost(
+    fake_client,
+):
+    messages = []
+
+    class RecordingElicit:
+        async def __call__(self, message, response_type=bool):
+            messages.append(message)
+            return types.SimpleNamespace(action="accept", data=True)
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=50.0)
+    ctx = _ctx(fake_client, cfg, elicit=RecordingElicit())
+    await nexus_submit_batch(ctx, circuits=["a", "b", "c"], n_shots=10, device="H2-1E")
+    assert len(messages) == 1  # one confirmation for the whole batch
+    assert "3 circuits" in messages[0] and "10 shots" in messages[0]
+    assert "9.0" in messages[0]  # FakeClient aggregate: 3.0 per circuit
+
+
+async def test_submit_batch_declined_confirmation_submits_nothing(fake_client):
+    submitted = []
+
+    class TrackingClient:
+        def __getattr__(self, item):
+            return getattr(fake_client, item)
+
+        def submit_batch(self, **kwargs):
+            submitted.append(kwargs)
+            return {"job_id": "j-batch"}
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=50.0)
+    ctx = _ctx(TrackingClient(), cfg, elicit=_Elicit(accept=False))
+    with pytest.raises(SpendDenied, match="not confirmed"):
+        await nexus_submit_batch(ctx, circuits=["a", "b"], n_shots=10, device="H2-1E")
+    assert submitted == []
+
+
+async def test_submit_batch_over_size_cap_raises_tool_error(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), max_submissions_per_minute=100)
+    with pytest.raises(ToolError, match=str(MAX_BATCH_SIZE)):
+        await nexus_submit_batch(
+            _ctx(fake_client, cfg), circuits=["x"] * (MAX_BATCH_SIZE + 1), n_shots=10
+        )
+
+
+async def test_submit_batch_counts_each_circuit_against_rate_limit(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}))  # default cap: 6/min
+    ctx = _ctx(fake_client, cfg)
+    await nexus_submit_batch(ctx, circuits=["a", "b", "c", "d"], n_shots=10)
+    with pytest.raises(RateLimited, match="4 used"):
+        await nexus_submit_batch(ctx, circuits=["e", "f", "g"], n_shots=10)
+
+
+async def test_submit_batch_respects_project_allowlist(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), projects=frozenset({"sandbox"}))
+    with pytest.raises(ProjectDenied):
+        await nexus_submit_batch(
+            _ctx(fake_client, cfg), circuits=["a"], n_shots=10, project="other"
+        )
 
 
 async def test_submit_and_wait_runs_on_free_emulator(fake_client):

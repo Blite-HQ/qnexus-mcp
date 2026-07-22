@@ -24,5 +24,11 @@ def test_server_masks_error_details(fake_client):
 def test_execute_surface_lists_submit_not_destructive(fake_client):
     cfg = ServerConfig(toolsets=frozenset({"read", "execute"}))
     names = registered_tool_names(build_server(cfg, fake_client))
-    assert {"nexus_submit", "nexus_estimate_cost", "nexus_compile"} <= names
+    assert {"nexus_submit", "nexus_submit_batch", "nexus_estimate_cost", "nexus_compile"} <= names
     assert not any("delete" in n or "cancel" in n for n in names)  # destructive stays out
+
+
+def test_submit_batch_registered_only_with_execute_toolset(fake_client):
+    assert "nexus_submit_batch" not in registered_tool_names(
+        build_server(ServerConfig(), fake_client)
+    )

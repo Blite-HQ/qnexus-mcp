@@ -56,11 +56,24 @@ class FakeClient:
     def estimate_cost(self, circuit, n_shots, device):
         return 0.0 if device.upper().endswith("LE") else 3.0
 
+    def estimate_cost_batch(self, circuits, n_shots, device):
+        return 0.0 if device.upper().endswith("LE") else 3.0 * len(circuits)
+
     def compile(self, circuit, device, project=None):
         return {"device": device, "compiled": "compiled-ok"}
 
     def submit(self, circuit, n_shots, device, project=None, max_cost=None, idempotency_key=None):
         return {"job_id": "j-new", "device": device, "idempotency_key": idempotency_key}
+
+    def submit_batch(
+        self, circuits, n_shots, device, project=None, max_cost=None, idempotency_key=None
+    ):
+        return {
+            "job_id": "j-batch",
+            "device": device,
+            "n_circuits": len(circuits),
+            "idempotency_key": idempotency_key,
+        }
 
     def create_project(self, name, description=None):
         return {"name": name, "id": "proj-new"}

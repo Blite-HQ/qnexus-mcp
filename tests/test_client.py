@@ -125,6 +125,88 @@ def test_list_devices_strips_non_json_serializable_backend_info(monkeypatch):
     json.dumps(rows)  # must not raise: this is exactly what MCP structured_content needs
 
 
+_VALID_QASM = (
+    'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[1];\ncreg c[1];\nh q[0];\nmeasure q[0] -> c[0];\n'
+)
+
+
+class _RecordingBatchQnx:
+    """Fake qnexus module recording compile/execute calls for batch assertions."""
+
+    def __init__(self, cost=0.0):
+        self.execute_calls = []
+        self.cost_calls = []
+        self._cost = cost
+
+    class QuantinuumConfig:
+        def __init__(self, device_name):
+            self.device_name = device_name
+
+    @property
+    def projects(self):
+        return types.SimpleNamespace(get_or_create=lambda name, description=None: f"proj:{name}")
+
+    @property
+    def circuits(self):
+        def cost(refs, n_shots, config):
+            self.cost_calls.append((refs, n_shots, config.device_name))
+            return self._cost
+
+        return types.SimpleNamespace(
+            upload=lambda circuit, name, project: f"ref:{circuit.n_qubits}", cost=cost
+        )
+
+    def compile(self, programs, backend_config, name, project):
+        return [f"compiled:{p}" for p in programs]
+
+    def start_execute_job(self, **kwargs):
+        self.execute_calls.append(kwargs)
+        return types.SimpleNamespace(id="batch-job-1")
+
+
+def test_submit_batch_compiles_all_and_starts_one_execute_job(monkeypatch):
+    qnx = _RecordingBatchQnx()
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    out = QnexusClient().submit_batch(
+        circuits=[_VALID_QASM, _VALID_QASM, _VALID_QASM],
+        n_shots=[10, 10, 10],
+        device="H2-1LE",
+    )
+    assert out == {"job_id": "batch-job-1", "device": "H2-1LE", "n_circuits": 3}
+    assert len(qnx.execute_calls) == 1  # ONE Nexus job for the whole batch
+    call = qnx.execute_calls[0]
+    assert len(call["programs"]) == 3
+    assert call["n_shots"] == [10, 10, 10]
+
+
+def test_submit_batch_passes_per_item_max_cost_list(monkeypatch):
+    qnx = _RecordingBatchQnx()
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    QnexusClient().submit_batch(
+        circuits=[_VALID_QASM, _VALID_QASM],
+        n_shots=[5, 5],
+        device="H2-1E",
+        max_cost=[2.5, 2.5],
+    )
+    assert qnx.execute_calls[0]["max_cost"] == [2.5, 2.5]
+
+
+def test_estimate_cost_batch_returns_aggregate_float(monkeypatch):
+    qnx = _RecordingBatchQnx(cost=7.5)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    cost = QnexusClient().estimate_cost_batch([_VALID_QASM, _VALID_QASM], [10, 10], "H2-1E")
+    assert cost == 7.5
+    (refs, n_shots, device) = qnx.cost_calls[0]
+    assert len(refs) == 2 and n_shots == [10, 10] and device == "H2-1E"
+
+
+def test_estimate_cost_batch_refuses_none_estimate_on_billable_device(monkeypatch):
+    qnx = _RecordingBatchQnx(cost=None)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    with pytest.raises(ToolError, match="refusing to treat that as free"):
+        QnexusClient().estimate_cost_batch([_VALID_QASM], [10], "H2-1E")
+
+
 def test_get_results_downloads_every_ref_in_submission_order(monkeypatch):
     # Latent bug found by audit: only refs[0] was downloaded, silently dropping every other
     # item of a multi-circuit (batch) job.

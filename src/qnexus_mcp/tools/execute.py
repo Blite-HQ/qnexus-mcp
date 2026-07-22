@@ -13,6 +13,7 @@ from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 from pydantic import Field
 
 from ..backends import DEFAULT_DEVICE, is_billable
@@ -34,6 +35,10 @@ Shots = Annotated[int, Field(ge=1, le=100_000)]
 # Bound the wait so `nexus_submit_and_wait` can never hang a session indefinitely.
 WaitTimeout = Annotated[float, Field(gt=0, le=3600)]
 DEFAULT_WAIT_TIMEOUT = 300.0
+# Bound batch size so one call can't enqueue unbounded work; the rate limiter additionally
+# counts every circuit in the batch against --max-submissions-per-minute.
+MAX_BATCH_SIZE = 20
+BatchCircuits = Annotated[list[str], Field(min_length=1, max_length=MAX_BATCH_SIZE)]
 
 
 async def nexus_estimate_cost(
@@ -109,6 +114,67 @@ async def nexus_submit(
         )
 
 
+async def nexus_submit_batch(
+    ctx: Context,
+    circuits: BatchCircuits,
+    n_shots: Shots = 100,
+    device: str = DEFAULT_DEVICE,
+    project: str | None = None,
+) -> dict[str, Any]:
+    """Submit up to 20 QASM circuits as one multi-item Nexus job (e.g. a parameter sweep).
+
+    `n_shots` applies to each circuit; per-circuit results come back in submission order via
+    nexus_get_results. Defaults to the free H2-1LE emulator. Billable devices require
+    --allow-spend (and --allow-hardware for hardware), an aggregate estimate under
+    --max-credits, and ONE explicit confirmation for the whole batch. Every circuit counts
+    against the submission rate limit.
+    """
+    client = client_of(ctx)
+    config = config_of(ctx)
+    guard = SpendGuard(config)
+    # Field bounds the MCP schema; re-check here because guards must not rely on client-side
+    # validation (direct calls bypass FastMCP).
+    if not 1 <= len(circuits) <= MAX_BATCH_SIZE:
+        raise ToolError(
+            f"Batch size must be between 1 and {MAX_BATCH_SIZE} circuits, got {len(circuits)}. "
+            "Nothing was submitted."
+        )
+    check_project_allowed(config, project)
+    guard.precheck(device)
+    rate_limiter_of(ctx).check(count=len(circuits))
+    shots_list = [n_shots] * len(circuits)
+    estimated = (
+        await call_sync(client.estimate_cost_batch, list(circuits), shots_list, device)
+        if is_billable(device)
+        else 0.0
+    )
+
+    async def quota_check(name: str) -> bool:
+        return await call_sync(client.check_quota, name)
+
+    await guard.check_and_confirm(
+        device=device,
+        estimated_cost=estimated,
+        confirm=confirm_from_ctx(ctx),
+        quota_check=quota_check,
+        action=f"Submit {len(circuits)} circuits x {n_shots} shots to {device} as one batch job?",
+    )
+    key = guard.idempotency_key(
+        {"circuits": list(circuits), "n_shots": n_shots, "device": device, "project": project}
+    )
+    max_cost = [config.max_credits] * len(circuits) if config.max_credits else None
+    async with mutation_lock_of(ctx):
+        return await call_sync(
+            client.submit_batch,
+            circuits=list(circuits),
+            n_shots=shots_list,
+            device=device,
+            project=project,
+            max_cost=max_cost,
+            idempotency_key=key,
+        )
+
+
 async def nexus_submit_and_wait(
     ctx: Context,
     circuit: str,
@@ -155,5 +221,6 @@ EXECUTE_SPECS: list[ToolSpec] = [
     _spec(nexus_estimate_cost),
     _spec(nexus_compile),
     _spec(nexus_submit, is_spend=True),
+    _spec(nexus_submit_batch, is_spend=True),
     _spec(nexus_submit_and_wait, is_spend=True),
 ]

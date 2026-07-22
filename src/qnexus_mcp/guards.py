@@ -110,12 +110,14 @@ class SpendGuard:
         estimated_cost: float,
         confirm: Confirm,
         quota_check: QuotaCheck | None = None,
+        action: str | None = None,
     ) -> None:
         """Allow, or raise SpendDenied. Free devices (H2-1LE / *-1SC) pass with no gate.
 
         For billable emulators the "simulation" quota is pre-checked (when a checker is supplied).
         Real hardware has no balance-check API in the qnexus SDK, so the ceiling + confirmation are
-        the only pre-submission guards there.
+        the only pre-submission guards there. `action` overrides the first sentence of the
+        confirmation prompt (e.g. to describe a batch); cost and ceiling are always appended.
         """
         if not is_billable(device):
             return
@@ -135,7 +137,7 @@ class SpendGuard:
                 "refusing to submit to a billable emulator"
             )
         approved = await confirm(
-            f"Submit to {device}? Estimated cost: {estimated_cost} HQC "
+            f"{action or f'Submit to {device}?'} Estimated cost: {estimated_cost} HQC "
             f"(ceiling {c.max_credits}). This spends real credits."
         )
         if not approved:
