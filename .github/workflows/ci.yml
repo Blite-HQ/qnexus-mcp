@@ -17,6 +17,9 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
@@ -25,12 +28,18 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src
-      - run: uv run pytest -v
+      # --cov-fail-under is a regression backstop, not a 100%-coverage target: the real SDK-wiring
+      # paths in client.py are only exercised by the opt-in live smoke (needs real Nexus creds), so
+      # the floor sits a few points under today's real coverage (76%), not against 100%.
+      - run: uv run pytest -v --cov=qnexus_mcp --cov-report=term-missing --cov-fail-under=70
 
   audit:
     # Known-vulnerability scan of the locked dependency tree (osv-scanner reads uv.lock natively).
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
       - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         # default scan-args (--recursive ./) pick up uv.lock
@@ -41,6 +50,9 @@ jobs:
     permissions:
       pull-requests: read
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017 # v5.5.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

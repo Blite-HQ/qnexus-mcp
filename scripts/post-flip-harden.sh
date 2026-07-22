@@ -28,32 +28,40 @@ JSON
 echo "==> Dependabot vulnerability alerts"
 gh api -X PUT "repos/${REPO}/vulnerability-alerts"
 
-echo "==> Branch protection on main"
-# Conservative default: CI must pass, no force-push, no deletion. Does NOT
-# force everything through a PR (enforce_admins=false, no required reviews)
-# so a maintainer can still push directly during active solo iteration; tighten
-# with required_pull_request_reviews once there are other contributors.
-gh api -X PUT "repos/${REPO}/branches/main/protection" --input - <<'JSON'
+echo "==> Branch protection on main (repository ruleset)"
+# A ruleset, not the classic branches/protection API -- the modern, stackable
+# replacement (same choice already made for Chimera). CI must pass, no
+# force-push, no deletion. No pull_request rule, so this doesn't force every
+# change through a PR -- add one once there are other contributors.
+gh api -X POST "repos/${REPO}/rulesets" --input - <<'JSON'
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": [
-      "test (3.10)",
-      "test (3.11)",
-      "test (3.12)",
-      "test (3.13)",
-      "audit"
-    ]
+  "name": "main-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] }
   },
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          {"context": "test (3.10)"},
+          {"context": "test (3.11)"},
+          {"context": "test (3.12)"},
+          {"context": "test (3.13)"},
+          {"context": "audit"}
+        ]
+      }
+    }
+  ]
 }
 JSON
 
 echo "==> Verifying"
 gh api "repos/${REPO}" --jq '{visibility, security_and_analysis}'
-gh api "repos/${REPO}/branches/main/protection" --jq '{required_status_checks, allow_force_pushes, allow_deletions}'
+gh api "repos/${REPO}/rulesets" --jq '.[] | {id, name, enforcement}'
 echo "Done."
