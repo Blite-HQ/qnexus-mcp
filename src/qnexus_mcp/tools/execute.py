@@ -164,7 +164,9 @@ async def nexus_submit_batch(
     key = guard.idempotency_key(
         {"circuits": list(circuits), "n_shots": n_shots, "device": device, "project": project}
     )
-    max_cost = [config.max_credits] * len(circuits) if config.max_credits else None
+    # --max-credits is a per-CALL ceiling. Nexus enforces max_cost per item, so give each item
+    # an equal share; the batch's runtime worst case then still sums to the documented ceiling.
+    max_cost = [config.max_credits / len(circuits)] * len(circuits) if config.max_credits else None
     async with mutation_lock_of(ctx):
         return await call_sync(
             client.submit_batch,

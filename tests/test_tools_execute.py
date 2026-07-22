@@ -136,6 +136,26 @@ async def test_submit_batch_declined_confirmation_submits_nothing(fake_client):
     assert submitted == []
 
 
+async def test_submit_batch_divides_max_credits_ceiling_across_items(fake_client):
+    # Review finding: the SDK enforces max_cost per item, so N x the full ceiling would let one
+    # batch overrun --max-credits by up to Nx at runtime. The ceiling stays per-CALL: divided.
+    recorded = {}
+
+    class TrackingClient:
+        def __getattr__(self, item):
+            return getattr(fake_client, item)
+
+        def submit_batch(self, **kwargs):
+            recorded.update(kwargs)
+            return {"job_id": "j-batch", "n_circuits": len(kwargs["circuits"])}
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=20.0)
+    await nexus_submit_batch(
+        _ctx(TrackingClient(), cfg), circuits=["a", "b", "c", "d"], n_shots=10, device="H2-1E"
+    )
+    assert recorded["max_cost"] == [5.0, 5.0, 5.0, 5.0]  # sums to the per-call ceiling
+
+
 async def test_submit_batch_over_size_cap_raises_tool_error(fake_client):
     cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), max_submissions_per_minute=100)
     with pytest.raises(ToolError, match=str(MAX_BATCH_SIZE)):
