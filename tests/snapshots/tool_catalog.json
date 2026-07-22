@@ -609,7 +609,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Submit up to 20 QASM circuits as one multi-item Nexus job (e.g. a parameter sweep).\n\n`n_shots` applies to each circuit; per-circuit results come back in submission order via\nnexus_get_results. Defaults to the free H2-1LE emulator. Billable devices require\n--allow-spend (and --allow-hardware for hardware), an aggregate estimate under\n--max-credits, and ONE explicit confirmation for the whole batch. Every circuit counts\nagainst the submission rate limit.",
+    "description": "Submit up to 20 QASM circuits as one multi-item Nexus job (e.g. a parameter sweep).\n\n`n_shots` applies to each circuit; per-circuit results come back in submission order via\nnexus_get_results. Defaults to the free H2-1LE emulator. Billable devices require\n--allow-spend (and --allow-hardware for hardware), an aggregate estimate under\n--max-credits, and ONE explicit confirmation for the whole batch. Every circuit counts\nagainst the submission rate limit, so the largest admissible batch is also bounded by\n--max-submissions-per-minute (default 6); a larger batch is rejected with guidance to\nsplit it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

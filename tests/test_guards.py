@@ -107,6 +107,17 @@ def test_rate_limited_message_states_capacity_and_flag():
     assert "1" in str(exc.value)
 
 
+def test_batch_larger_than_cap_gets_split_guidance_not_wait_advice():
+    # Review finding: with count > max the old message said "wait", which can never succeed.
+    limiter = SubmitRateLimiter(max_per_minute=6, now=lambda: 0.0)
+    with pytest.raises(RateLimited) as exc:
+        limiter.check(count=7)
+    message = str(exc.value)
+    assert "Split" in message and "6" in message
+    assert "Wait before submitting again" not in message
+    limiter.check(count=6)  # the rejected oversized batch consumed nothing
+
+
 def test_bind_state_builds_limiter_from_config(fake_client):
     server = types.SimpleNamespace()
     bind_state(server, fake_client, ServerConfig(max_submissions_per_minute=2))

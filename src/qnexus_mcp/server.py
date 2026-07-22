@@ -55,7 +55,8 @@ prefer plain `nexus_submit` + polling `nexus_job_status` for anything that might
 
 For parameter sweeps or any run of several circuits, prefer ONE `nexus_submit_batch` call over a
 loop of `nexus_submit`: it is a single Nexus job with one confirmation, and each circuit still
-counts against the submission rate limit either way.
+counts against the submission rate limit either way. Batches larger than the per-minute cap are
+rejected with guidance to split; splitting or waiting is the answer, never a retry loop.
 
 Result counts are capped at the top --max-outcomes outcomes by frequency; check the
 `omitted_outcomes` / `omitted_shots` fields before treating a distribution as complete. List tools

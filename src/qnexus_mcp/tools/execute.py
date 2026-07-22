@@ -127,7 +127,9 @@ async def nexus_submit_batch(
     nexus_get_results. Defaults to the free H2-1LE emulator. Billable devices require
     --allow-spend (and --allow-hardware for hardware), an aggregate estimate under
     --max-credits, and ONE explicit confirmation for the whole batch. Every circuit counts
-    against the submission rate limit.
+    against the submission rate limit, so the largest admissible batch is also bounded by
+    --max-submissions-per-minute (default 6); a larger batch is rejected with guidance to
+    split it.
     """
     client = client_of(ctx)
     config = config_of(ctx)

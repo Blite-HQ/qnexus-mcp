@@ -61,12 +61,22 @@ class SubmitRateLimiter:
     def check(self, count: int = 1) -> None:
         """Consume `count` submission slots (a batch of N circuits consumes N), or raise.
 
-        A rejected call consumes nothing, so a too-large batch can be retried smaller (or later)
-        without having burned capacity.
+        A rate-rejected call consumes nothing, so a too-large batch can be retried smaller (or
+        later) without having burned capacity. Admitted slots are consumed up front and stay
+        consumed even if the submission is later declined or fails (fail-closed by design: the
+        limiter bounds *attempted* queue pressure, not successes).
         """
         t = self._now()
         while self._stamps and t - self._stamps[0] > 60.0:
             self._stamps.popleft()
+        if count > self._max:
+            # Waiting can never make this batch fit; saying "wait" would bait a futile loop.
+            raise RateLimited(
+                f"A batch of {count} circuits exceeds the {self._max}-per-minute submission cap "
+                f"and can never be admitted at this setting. Split it into batches of at most "
+                f"{self._max} circuits, or have the operator restart with a higher "
+                "--max-submissions-per-minute."
+            )
         if len(self._stamps) + count > self._max:
             raise RateLimited(
                 f"Rate limit: at most {self._max} submissions per minute "
