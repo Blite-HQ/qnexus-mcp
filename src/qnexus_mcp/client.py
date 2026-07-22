@@ -317,8 +317,10 @@ class QnexusClient:
                 f"Job {job_id} has no results yet. Check nexus_job_status; only COMPLETED jobs "
                 "have results."
             )
-        result = refs[0].download_result()
-        out: dict[str, Any] = redact({"id": job_id, "counts": _bitstrings(result.get_counts())})
+        # One ref per job item, in submission order: a multi-circuit (batch) job returns every
+        # item's counts, not just the first (audit fix).
+        counts_list = [_bitstrings(ref.download_result().get_counts()) for ref in refs]
+        out: dict[str, Any] = redact({"id": job_id, "counts_list": counts_list})
         return out
 
     # --- execute path (verified live at the M2.2 smoke) ---------------------------------------

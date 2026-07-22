@@ -9,9 +9,12 @@ from qnexus_mcp.context import bind_state
 class FakeClient:
     """In-memory stand-in for the Nexus client, so tools/guards are testable offline."""
 
-    def __init__(self, logged_in: bool = True, quota_ok: bool = True) -> None:
+    def __init__(
+        self, logged_in: bool = True, quota_ok: bool = True, n_result_items: int = 1
+    ) -> None:
         self._logged_in = logged_in
         self._quota_ok = quota_ok
+        self._n_result_items = n_result_items
 
     def auth_status(self):
         return {
@@ -47,7 +50,8 @@ class FakeClient:
         return {"id": job_id, "hqc_cost": 0.0}
 
     def get_results(self, job_id):
-        return {"id": job_id, "counts": {"00": 51, "11": 49}}
+        counts_list = [{"00": 51, "11": 49} for _ in range(self._n_result_items)]
+        return {"id": job_id, "counts_list": counts_list}
 
     def estimate_cost(self, circuit, n_shots, device):
         return 0.0 if device.upper().endswith("LE") else 3.0

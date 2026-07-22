@@ -125,6 +125,33 @@ def test_list_devices_strips_non_json_serializable_backend_info(monkeypatch):
     json.dumps(rows)  # must not raise: this is exactly what MCP structured_content needs
 
 
+def test_get_results_downloads_every_ref_in_submission_order(monkeypatch):
+    # Latent bug found by audit: only refs[0] was downloaded, silently dropping every other
+    # item of a multi-circuit (batch) job.
+    class _FakeRef:
+        def __init__(self, counts):
+            self._counts = counts
+
+        def download_result(self):
+            return types.SimpleNamespace(get_counts=lambda: self._counts)
+
+    class _FakeJobs:
+        @staticmethod
+        def get(id):
+            return object()
+
+        @staticmethod
+        def results(job):
+            return [_FakeRef({(0, 0): 3}), _FakeRef({(1, 1): 7})]
+
+    class _FakeQnx:
+        jobs = _FakeJobs()
+
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
+    out = QnexusClient().get_results(job_id="j1")
+    assert out == {"id": "j1", "counts_list": [{"00": 3}, {"11": 7}]}
+
+
 def test_wait_and_results_timeout_gives_actionable_message(monkeypatch):
     class _FakeJobs:
         @staticmethod
