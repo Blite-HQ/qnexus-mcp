@@ -43,12 +43,16 @@ def test_live_submit_free_emulator_bell():
     job = client.submit(circuit=qasm, n_shots=20, device="H2-1LE")
     assert job["device"] == "H2-1LE" and job["job_id"]
 
-    # Same primitive the nexus_submit_and_wait poll loop uses: cheap status GETs until done.
+    # Same primitives the nexus_submit_and_wait poll loop uses: cheap status GETs until done,
+    # failing fast on terminal states instead of burning the full deadline.
+    from qnexus_mcp.polling import TERMINAL_FAILURES
+
     deadline = time.monotonic() + 180
     while True:
         status = client.job_status(job["job_id"])["status"]
         if status == "COMPLETED":
             break
+        assert status not in TERMINAL_FAILURES, f"job ended as {status}"
         assert time.monotonic() < deadline, f"job still {status} after 180s"
         time.sleep(5)
 
