@@ -58,16 +58,23 @@ class SubmitRateLimiter:
         self._now = now
         self._stamps: deque[float] = deque()
 
-    def check(self) -> None:
+    def check(self, count: int = 1) -> None:
+        """Consume `count` submission slots (a batch of N circuits consumes N), or raise.
+
+        A rejected call consumes nothing, so a too-large batch can be retried smaller (or later)
+        without having burned capacity.
+        """
         t = self._now()
         while self._stamps and t - self._stamps[0] > 60.0:
             self._stamps.popleft()
-        if len(self._stamps) >= self._max:
+        if len(self._stamps) + count > self._max:
             raise RateLimited(
-                f"Rate limit: at most {self._max} submissions per minute. "
-                "Wait before submitting again; do not retry in a loop."
+                f"Rate limit: at most {self._max} submissions per minute "
+                f"({len(self._stamps)} used, {count} requested). Wait before submitting again; "
+                "do not retry in a loop. The operator can raise the cap by restarting with "
+                "--max-submissions-per-minute."
             )
-        self._stamps.append(t)
+        self._stamps.extend([t] * count)
 
 
 class SpendGuard:

@@ -1,7 +1,10 @@
+import types
+
 import pytest
 
 from qnexus_mcp.config import ServerConfig
-from qnexus_mcp.guards import SpendDenied, SpendGuard
+from qnexus_mcp.context import bind_state, rate_limiter_of
+from qnexus_mcp.guards import RateLimited, SpendDenied, SpendGuard, SubmitRateLimiter
 
 
 async def _yes(_msg):
@@ -57,3 +60,39 @@ def test_hardware_precheck_reports_both_missing_flags_at_once():
 def test_idempotency_key_is_stable():
     g = SpendGuard(ServerConfig())
     assert g.idempotency_key({"b": 2, "a": 1}) == g.idempotency_key({"a": 1, "b": 2})
+
+
+# --- batch-aware, configurable rate limiting --------------------------------------------------
+
+
+def test_rate_limiter_batch_consumes_count_slots():
+    limiter = SubmitRateLimiter(max_per_minute=6, now=lambda: 0.0)
+    limiter.check(count=5)
+    limiter.check()  # sixth slot still free
+    with pytest.raises(RateLimited):
+        limiter.check()
+
+
+def test_rate_limiter_rejects_batch_exceeding_remaining_capacity_without_recording():
+    limiter = SubmitRateLimiter(max_per_minute=6, now=lambda: 0.0)
+    limiter.check(count=4)
+    with pytest.raises(RateLimited, match="4 used"):
+        limiter.check(count=3)  # only 2 slots left
+    limiter.check(count=2)  # the rejected batch must not have consumed anything
+
+
+def test_rate_limited_message_states_capacity_and_flag():
+    limiter = SubmitRateLimiter(max_per_minute=1, now=lambda: 0.0)
+    limiter.check()
+    with pytest.raises(RateLimited, match="max-submissions-per-minute") as exc:
+        limiter.check()
+    assert "1" in str(exc.value)
+
+
+def test_bind_state_builds_limiter_from_config(fake_client):
+    server = types.SimpleNamespace()
+    bind_state(server, fake_client, ServerConfig(max_submissions_per_minute=2))
+    limiter = rate_limiter_of(types.SimpleNamespace(fastmcp=server))
+    limiter.check(count=2)
+    with pytest.raises(RateLimited):
+        limiter.check()

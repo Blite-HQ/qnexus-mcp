@@ -31,7 +31,7 @@ def bind_state(server: Any, client: NexusClient, config: ServerConfig) -> None:
     setattr(server, _CLIENT_ATTR, client)
     setattr(server, _CONFIG_ATTR, config)
     setattr(server, _LOCK_ATTR, anyio.Lock())
-    setattr(server, _RATE_ATTR, SubmitRateLimiter())
+    setattr(server, _RATE_ATTR, SubmitRateLimiter(config.max_submissions_per_minute))
 
 
 def client_of(ctx: Context) -> NexusClient:
