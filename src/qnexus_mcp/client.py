@@ -94,6 +94,24 @@ def _parse_qasm(circuit: str) -> Any:
         ) from None
 
 
+def _get_job(qnx: Any, job_id: str) -> Any:
+    """Resolve a job by id, translating an unknown id into an actionable ToolError.
+
+    qnx.jobs.get(id=...) doesn't raise qnexus.exceptions.ZeroMatches for a bad id the way
+    projects.get(name=...) does -- it raises a bare KeyError('message') from inside the SDK's own
+    response parsing (found live: an unknown job id surfaced as an opaque "Error calling tool" with
+    zero detail, since _tool_error only maps qnexus/httpx exception types). Give it the same
+    actionable shape as the project-lookup case.
+    """
+    try:
+        return qnx.jobs.get(id=job_id)
+    except KeyError:
+        raise ToolError(
+            f"No Nexus job matches id '{job_id}'. Check the id with nexus_list_jobs; "
+            "nothing was changed."
+        ) from None
+
+
 def _tool_error(exc: Exception) -> ToolError | None:
     """Map a qnexus/network exception to an actionable, safe ToolError (or None to re-raise)."""
     try:
@@ -272,7 +290,7 @@ class QnexusClient:
     @_mapped
     def job_status(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        st = qnx.jobs.status(qnx.jobs.get(id=job_id))
+        st = qnx.jobs.status(_get_job(qnx, job_id))
         out: dict[str, Any] = redact(
             {
                 "id": job_id,
@@ -286,14 +304,14 @@ class QnexusClient:
     @_mapped
     def job_cost(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        job = qnx.jobs.get(id=job_id)
+        job = _get_job(qnx, job_id)
         out: dict[str, Any] = redact({"id": job_id, "hqc_cost": qnx.jobs.cost(job)})
         return out
 
     @_mapped
     def get_results(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        refs = qnx.jobs.results(qnx.jobs.get(id=job_id))
+        refs = qnx.jobs.results(_get_job(qnx, job_id))
         if not refs:
             raise ToolError(
                 f"Job {job_id} has no results yet. Check nexus_job_status; only COMPLETED jobs "
@@ -376,7 +394,7 @@ class QnexusClient:
         import asyncio
 
         qnx = _qnx()
-        job = qnx.jobs.get(id=job_id)
+        job = _get_job(qnx, job_id)
         try:
             # SDK default HybridStrategy: websocket first, exponential-backoff polling fallback.
             qnx.jobs.wait_for(job, timeout=timeout)
@@ -442,14 +460,14 @@ class QnexusClient:
     @_mapped
     def cancel_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        qnx.jobs.cancel(qnx.jobs.get(id=job_id))
+        qnx.jobs.cancel(_get_job(qnx, job_id))
         out: dict[str, Any] = redact({"job_id": job_id, "cancelled": True})
         return out
 
     @_mapped
     def delete_job(self, job_id: str) -> dict[str, Any]:
         qnx = _qnx()
-        qnx.jobs.delete(qnx.jobs.get(id=job_id))
+        qnx.jobs.delete(_get_job(qnx, job_id))
         out: dict[str, Any] = redact({"job_id": job_id, "deleted": True})
         return out
 

@@ -33,6 +33,27 @@ def test_upload_program_rejects_invalid_base64():
         QnexusClient().upload_program(program_base64="not-base64!!!", project="p", name="n")
 
 
+def test_job_status_unknown_id_gives_actionable_message(monkeypatch):
+    # Found live: qnx.jobs.get(id=...) doesn't raise ZeroMatches for an unknown id the way
+    # projects.get(name=...) does -- it raises a bare KeyError from inside the SDK's own response
+    # parsing, which _tool_error didn't map, so it surfaced as an opaque "Error calling tool".
+    class _FakeJobs:
+        @staticmethod
+        def get(id):
+            raise KeyError("message")
+
+        @staticmethod
+        def status(job):  # pragma: no cover - not reached, _get_job raises first
+            raise AssertionError("should not be called: _get_job must raise before this")
+
+    class _FakeQnx:
+        jobs = _FakeJobs()
+
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
+    with pytest.raises(ToolError, match="No Nexus job matches id 'bogus'"):
+        QnexusClient().job_status(job_id="bogus")
+
+
 def test_delete_project_requires_archived_first(monkeypatch):
     import qnexus.exceptions as qnx_exc
 
