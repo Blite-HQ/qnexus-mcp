@@ -53,7 +53,6 @@ class NexusClient(Protocol):
         max_cost: float | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
-    def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]: ...
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]: ...
     def upload_circuit(self, circuit: str, project: str, name: str) -> dict[str, Any]: ...
     def upload_program(self, program_base64: str, project: str, name: str) -> dict[str, Any]: ...
@@ -389,30 +388,6 @@ class QnexusClient:
             valid_check=True,
         )
         out: dict[str, Any] = redact({"job_id": str(job.id), "device": device})
-        return out
-
-    @_mapped
-    def wait_and_results(self, job_id: str, timeout: float | None = None) -> dict[str, Any]:
-        import asyncio
-
-        qnx = _qnx()
-        job = _get_job(qnx, job_id)
-        try:
-            # SDK default HybridStrategy: websocket first, exponential-backoff polling fallback.
-            qnx.jobs.wait_for(job, timeout=timeout)
-        except (TimeoutError, asyncio.TimeoutError):
-            raise ToolError(
-                f"Timed out after {timeout}s waiting for job {job_id}. The job is still running "
-                "on Nexus. Do not resubmit; poll nexus_job_status and fetch nexus_get_results "
-                "when it is COMPLETED."
-            ) from None
-        refs = qnx.jobs.results(job)
-        if not refs:
-            raise ToolError(
-                f"Job {job_id} finished but returned no results. Check nexus_job_status."
-            )
-        result = refs[0].download_result()
-        out: dict[str, Any] = redact({"job_id": job_id, "counts": _bitstrings(result.get_counts())})
         return out
 
     # --- manage (opt-in via --toolsets manage) ------------------------------------------------

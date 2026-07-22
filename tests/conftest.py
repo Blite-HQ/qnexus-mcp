@@ -62,9 +62,6 @@ class FakeClient:
     def submit(self, circuit, n_shots, device, project=None, max_cost=None, idempotency_key=None):
         return {"job_id": "j-new", "device": device, "idempotency_key": idempotency_key}
 
-    def wait_and_results(self, job_id, timeout=None):
-        return {"job_id": job_id, "counts": {"00": 51, "11": 49}}
-
     def create_project(self, name, description=None):
         return {"name": name, "id": "proj-new"}
 
@@ -96,9 +93,12 @@ def fake_client():
 def make_ctx():
     """Factory: build a minimal Context-like object carrying bound server state."""
 
+    async def _report_progress(progress, total=None, message=None):
+        return None
+
     def _make(client, config=None):
         server = types.SimpleNamespace()
         bind_state(server, client, config or ServerConfig())
-        return types.SimpleNamespace(fastmcp=server)
+        return types.SimpleNamespace(fastmcp=server, report_progress=_report_progress)
 
     return _make

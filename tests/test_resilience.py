@@ -33,31 +33,37 @@ class _Elicit:
 
 
 def _ctx(client, config=None, elicit=None):
+    async def report_progress(progress, total=None, message=None):
+        return None
+
     server = types.SimpleNamespace()
     bind_state(server, client, config or ServerConfig())
-    return types.SimpleNamespace(fastmcp=server, elicit=elicit or _Elicit())
+    return types.SimpleNamespace(
+        fastmcp=server, elicit=elicit or _Elicit(), report_progress=report_progress
+    )
 
 
 # --- thread offload: the SDK's own asyncio.run must work from async tool handlers -------------
 
 
 async def test_sdk_asyncio_run_works_via_tool(fake_client):
-    """qnx.jobs.wait_for calls asyncio.run(); called on the event loop it would RuntimeError.
-    The tool path must offload to a thread so it works (regression for the M2 wiring)."""
+    """Parts of the qnexus SDK call asyncio.run() internally; called on the event loop that
+    would RuntimeError. The tool path must offload every client call to a thread (regression
+    for the M2 wiring, now exercised through the poll loop's job_status calls)."""
 
     class SdkLikeClient:
         def __getattr__(self, item):
             return getattr(fake_client, item)
 
-        def wait_and_results(self, job_id, timeout=None):
+        def job_status(self, job_id):
             async def sdk_internal():
-                return {"job_id": job_id, "counts": {"00": 20}}
+                return {"id": job_id, "status": "COMPLETED"}
 
-            return asyncio.run(sdk_internal())  # exactly what qnx.jobs.wait_for does
+            return asyncio.run(sdk_internal())  # what e.g. qnx.jobs.wait_for does internally
 
     cfg = ServerConfig(toolsets=frozenset({"read", "execute"}))
     out = await nexus_submit_and_wait(_ctx(SdkLikeClient(), cfg), circuit="OPENQASM 2.0;")
-    assert out["counts"] == {"00": 20}
+    assert out["counts"] == {"00": 51, "11": 49}
 
 
 # --- error translation (QnexusClient._mapped / _tool_error) -----------------------------------

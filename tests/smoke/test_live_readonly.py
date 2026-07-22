@@ -6,6 +6,7 @@ read/execute signatures against the installed SDK and live Nexus.
 """
 
 import os
+import time
 
 import pytest
 
@@ -42,7 +43,16 @@ def test_live_submit_free_emulator_bell():
     job = client.submit(circuit=qasm, n_shots=20, device="H2-1LE")
     assert job["device"] == "H2-1LE" and job["job_id"]
 
-    results = client.wait_and_results(job["job_id"], timeout=180)
-    counts = results["counts"]
+    # Same primitive the nexus_submit_and_wait poll loop uses: cheap status GETs until done.
+    deadline = time.monotonic() + 180
+    while True:
+        status = client.job_status(job["job_id"])["status"]
+        if status == "COMPLETED":
+            break
+        assert time.monotonic() < deadline, f"job still {status} after 180s"
+        time.sleep(5)
+
+    results = client.get_results(job["job_id"])
+    counts = results["counts_list"][0]
     assert sum(counts.values()) == 20
     assert set(counts) <= {"00", "11"}, f"expected only Bell outcomes, saw {counts}"

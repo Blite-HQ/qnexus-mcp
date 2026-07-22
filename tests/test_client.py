@@ -150,25 +150,3 @@ def test_get_results_downloads_every_ref_in_submission_order(monkeypatch):
     monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
     out = QnexusClient().get_results(job_id="j1")
     assert out == {"id": "j1", "counts_list": [{"00": 3}, {"11": 7}]}
-
-
-def test_wait_and_results_timeout_gives_actionable_message(monkeypatch):
-    class _FakeJobs:
-        @staticmethod
-        def get(id):
-            return object()
-
-        @staticmethod
-        def wait_for(job, timeout=None):
-            raise TimeoutError()
-
-        @staticmethod
-        def results(job):  # pragma: no cover - not reached, timeout raises first
-            return []
-
-    class _FakeQnx:
-        jobs = _FakeJobs()
-
-    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: _FakeQnx())
-    with pytest.raises(ToolError, match="Timed out after 5s waiting for job j1"):
-        QnexusClient().wait_and_results(job_id="j1", timeout=5)

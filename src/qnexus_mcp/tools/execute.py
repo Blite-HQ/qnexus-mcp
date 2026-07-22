@@ -26,6 +26,8 @@ from ..context import (
 )
 from ..guards import SpendGuard, check_project_allowed
 from ..permissions import ToolSpec
+from ..polling import poll_job
+from ..results import shape_result
 
 # Bound shot counts so an injected loop can't pile unbounded work onto the (free) queue.
 Shots = Annotated[int, Field(ge=1, le=100_000)]
@@ -117,11 +119,24 @@ async def nexus_submit_and_wait(
 ) -> dict[str, Any]:
     """Submit a QASM circuit and return its results. Defaults to the free H2-1LE emulator.
 
-    Waits up to `timeout` seconds (default 300, max 3600); on timeout the job keeps running and
-    can be polled with nexus_job_status / nexus_get_results.
+    Waits up to `timeout` seconds (default 300, max 3600), reporting queue status as MCP
+    progress; on timeout the job keeps running and can be polled with nexus_job_status /
+    nexus_get_results. Counts are capped at the top --max-outcomes outcomes by frequency
+    (truncation is reported via total_outcomes / omitted_outcomes / omitted_shots).
     """
     job = await nexus_submit(ctx, circuit=circuit, n_shots=n_shots, device=device, project=project)
-    return await call_sync(client_of(ctx).wait_and_results, job["job_id"], timeout=timeout)
+    client = client_of(ctx)
+    job_id: str = job["job_id"]
+
+    async def status_fn() -> dict[str, Any]:
+        return await call_sync(client.job_status, job_id)
+
+    async def report(progress: float, total: float, message: str) -> None:
+        await ctx.report_progress(progress=progress, total=total, message=message)
+
+    await poll_job(status_fn, job_id=job_id, timeout=timeout, report=report)
+    raw = await call_sync(client.get_results, job_id)
+    return shape_result(job_id, raw["counts_list"], config_of(ctx).max_outcomes)
 
 
 def _spec(fn: Callable[..., Any], is_spend: bool = False) -> ToolSpec:

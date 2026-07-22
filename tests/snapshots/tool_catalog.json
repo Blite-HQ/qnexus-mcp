@@ -518,7 +518,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Submit a QASM circuit and return its results. Defaults to the free H2-1LE emulator.\n\nWaits up to `timeout` seconds (default 300, max 3600); on timeout the job keeps running and\ncan be polled with nexus_job_status / nexus_get_results.",
+    "description": "Submit a QASM circuit and return its results. Defaults to the free H2-1LE emulator.\n\nWaits up to `timeout` seconds (default 300, max 3600), reporting queue status as MCP\nprogress; on timeout the job keeps running and can be polled with nexus_job_status /\nnexus_get_results. Counts are capped at the top --max-outcomes outcomes by frequency\n(truncation is reported via total_outcomes / omitted_outcomes / omitted_shots).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
