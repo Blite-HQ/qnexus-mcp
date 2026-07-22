@@ -50,6 +50,55 @@ def test_negative_max_credits_rejected():
         ServerConfig(max_credits=-1.0)
 
 
+def test_response_and_rate_limit_defaults():
+    c = ServerConfig()
+    assert c.max_outcomes == 100
+    assert c.max_submissions_per_minute == 6
+
+
+def test_max_outcomes_cli_overrides_env():
+    c = config_from_sources(["--max-outcomes", "50"], env={"QNEXUS_MCP_MAX_OUTCOMES": "200"})
+    assert c.max_outcomes == 50
+
+
+def test_max_outcomes_env_fallback():
+    c = config_from_sources([], env={"QNEXUS_MCP_MAX_OUTCOMES": "200"})
+    assert c.max_outcomes == 200
+
+
+def test_max_outcomes_rejects_non_positive():
+    with pytest.raises(ValidationError):
+        ServerConfig(max_outcomes=0)
+
+
+def test_bad_max_outcomes_env_raises():
+    with pytest.raises(ValueError, match="must be an integer"):
+        config_from_sources([], env={"QNEXUS_MCP_MAX_OUTCOMES": "many"})
+
+
+def test_max_submissions_per_minute_cli_overrides_env():
+    c = config_from_sources(
+        ["--max-submissions-per-minute", "30"],
+        env={"QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE": "12"},
+    )
+    assert c.max_submissions_per_minute == 30
+
+
+def test_max_submissions_per_minute_env_fallback():
+    c = config_from_sources([], env={"QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE": "12"})
+    assert c.max_submissions_per_minute == 12
+
+
+def test_max_submissions_per_minute_rejects_non_positive():
+    with pytest.raises(ValidationError):
+        ServerConfig(max_submissions_per_minute=0)
+
+
+def test_bad_max_submissions_per_minute_env_raises():
+    with pytest.raises(ValueError, match="must be an integer"):
+        config_from_sources([], env={"QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE": "lots"})
+
+
 def test_projects_allowlist_parsed_from_cli_and_env():
     c = config_from_sources(["--projects", "sandbox,demo"], env={})
     assert c.projects == frozenset({"sandbox", "demo"})

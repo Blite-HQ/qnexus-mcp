@@ -22,6 +22,11 @@ class ServerConfig(BaseModel):
     allow_hardware: bool = False
     allow_destructive: bool = False
     max_credits: float = Field(default=0.0, ge=0.0)
+    # Cap on distinct measurement outcomes returned per result item (top-N by frequency), so a
+    # noisy/many-qubit job can never flood the agent's context. Truncation is always reported.
+    max_outcomes: int = Field(default=100, ge=1)
+    # Sliding-window cap on circuit submissions per minute (a batch of N consumes N slots).
+    max_submissions_per_minute: int = Field(default=6, ge=1)
     # Project allowlist for every mutating tool (execute/manage/destructive). None = all allowed.
     # Enforced by guards.check_project_allowed; reads are unaffected.
     projects: frozenset[str] | None = None
@@ -41,6 +46,19 @@ def _split(value: str | None) -> frozenset[str] | None:
     return frozenset(part.strip() for part in value.split(",") if part.strip())
 
 
+def _int_from(cli: int | None, env: Mapping[str, str], key: str, default: int) -> int:
+    """Resolve an integer setting: CLI wins, then env (with a clear parse error), then default."""
+    if cli is not None:
+        return cli
+    raw = env.get(key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{key} must be an integer, got {raw!r}") from exc
+
+
 def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig:
     """Build a ServerConfig from CLI args (highest priority) then env vars."""
     p = argparse.ArgumentParser(prog="qnexus-mcp", add_help=False)
@@ -49,6 +67,8 @@ def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig
     p.add_argument("--allow-hardware", action="store_true", default=None)
     p.add_argument("--allow-destructive", action="store_true", default=None)
     p.add_argument("--max-credits", type=float)
+    p.add_argument("--max-outcomes", type=int)
+    p.add_argument("--max-submissions-per-minute", type=int)
     p.add_argument("--projects")
     args, _ = p.parse_known_args(argv)
 
@@ -79,5 +99,9 @@ def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig
         allow_hardware=flag(args.allow_hardware, "QNEXUS_MCP_ALLOW_HARDWARE", False),
         allow_destructive=flag(args.allow_destructive, "QNEXUS_MCP_ALLOW_DESTRUCTIVE", False),
         max_credits=max_credits,
+        max_outcomes=_int_from(args.max_outcomes, env, "QNEXUS_MCP_MAX_OUTCOMES", 100),
+        max_submissions_per_minute=_int_from(
+            args.max_submissions_per_minute, env, "QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE", 6
+        ),
         projects=projects,
     )
