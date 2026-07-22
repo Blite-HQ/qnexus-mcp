@@ -52,6 +52,15 @@ default) -> `nexus_estimate_cost` -> `nexus_submit` (or `nexus_submit_and_wait` 
 prefer plain `nexus_submit` + polling `nexus_job_status` for anything that might run long) ->
 `nexus_get_results` once status is COMPLETED. All of read/execute default to the free, noiseless
 `H2-1LE` emulator unless you name a different device.
+
+For parameter sweeps or any run of several circuits, prefer ONE `nexus_submit_batch` call over a
+loop of `nexus_submit`: it is a single Nexus job with one confirmation, and each circuit still
+counts against the submission rate limit either way.
+
+Result counts are capped at the top --max-outcomes outcomes by frequency; check the
+`omitted_outcomes` / `omitted_shots` fields before treating a distribution as complete. List tools
+return one page plus a `total` count: use their `limit` and name/status/project filters instead of
+paging through everything.
 """
 
 

@@ -94,6 +94,7 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 | **execute** *(opt-in)* | `nexus_estimate_cost` | R/$0 | readOnly*, openWorld; *see note* |
 | | `nexus_compile` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
 | | `nexus_submit` | W/$ | not-readOnly, not-destructive, **not-idempotent**, openWorld |
+| | `nexus_submit_batch` | W/$ | not-readOnly, not-destructive, not-idempotent, openWorld |
 | | `nexus_submit_and_wait` | W/$ | not-readOnly, not-destructive, not-idempotent, openWorld |
 | **manage** *(opt-in)* | `nexus_create_project` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
 | | `nexus_upload_circuit` | W | not-readOnly, not-destructive, not-idempotent, openWorld |
@@ -116,6 +117,14 @@ Consolidated, `snake_case`, `nexus_` prefix, workflow-level. Class: **R**=read �
 > execution is `destructive: false` yet still gated for cost server-side (§6). All submit/execute tools are
 > `idempotent: false` (each call is a new billed run); double-spend is prevented by the mandatory
 > confirmation on billable submits, not by the hint.
+> **`nexus_submit_batch`** submits up to 20 circuits as **one** multi-item Nexus job (the SDK's native
+> `start_execute_job(programs=[...], n_shots=[...], max_cost=[...])`): one aggregate cost estimate, one
+> confirmation naming circuit count × shots × device, a per-item `max_cost` ceiling, and per-circuit rate
+> limit accounting. Per-circuit results come back in submission order via `nexus_get_results` (`items`).
+> **Bounded list/result responses:** `nexus_list_jobs`/`nexus_list_projects` return one page
+> (`limit` ≤ 500, plus a total count and optional name/status/project filters) instead of draining the
+> account's full history; result counts are capped at the top `--max-outcomes` outcomes by frequency with
+> explicit truncation metadata (`total_outcomes` / `omitted_outcomes` / `omitted_shots`).
 
 ## 5. Authentication
 
@@ -183,17 +192,23 @@ drift. Read-only-by-default removes that entire class of risk. Running circuits 
 | `--allow-hardware` | `QNEXUS_MCP_ALLOW_HARDWARE` | `false` | Permit real-QPU targets (implies review) |
 | `--allow-destructive` | `QNEXUS_MCP_ALLOW_DESTRUCTIVE` | `false` | Permit delete/cancel/archive |
 | `--max-credits` | `QNEXUS_MCP_MAX_CREDITS` | `0` | Hard per-call HQC ceiling; 0 blocks all spend |
+| `--max-outcomes` | `QNEXUS_MCP_MAX_OUTCOMES` | `100` | Top-N cap on distinct outcomes per result item; truncation always reported |
+| `--max-submissions-per-minute` | `QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE` | `6` | Sliding-window submission cap; a batch of N consumes N slots |
 | `--projects` | `QNEXUS_MCP_PROJECTS` | *(all)* | Project allowlist, enforced on every mutating tool (reads are unaffected) |
+
+All limits default strict; relaxing any of them is an explicit operator action at launch, never
+something a tool call can do.
 
 ## 7. Security controls (threat model → mitigation)
 
 | Threat | Why it applies here | Mitigation |
 |---|---|---|
-| **Prompt injection → unwanted spend/mutation** | Injection enters via job names, uploaded files, *and Nexus-returned output* (CyberArk: outputs inject too) | Treat all args **and all Nexus output** as untrusted data; spend caps + confirmation gates enforced server-side, independent of the LLM |
+| **Prompt injection → unwanted spend/mutation** | Injection enters via job names, uploaded files, *and Nexus-returned output* (CyberArk: outputs inject too) | Treat all args **and all Nexus output** as untrusted data; spend caps + confirmation gates enforced server-side, independent of the LLM. **Accepted residual risk (conscious decision):** Nexus content returns to the agent as plain JSON with no structural data/instruction tagging (none exists in today's MCP ecosystem); injected text can therefore confuse the agent's *reasoning* but cannot *escalate* — every consequential action requires launch flags the agent cannot set plus an in-protocol human confirmation naming the exact target and cost |
 | **Confused deputy / over-broad authority** | The agent could use our ambient `qnexus` credential beyond user intent | Least privilege; read-only default; per-op severity gates; optional per-project allowlist |
 | **Tool poisoning / line-jumping / rug pull** | Tool descriptions enter LLM context at `tools/list` before any call (Invariant Labs PoC exfiltrated `~/.ssh/id_rsa`) | Clean, static, auditable descriptions; **no** hidden instructions; **no** silent `tools/list_changed` mutation; signed/hash-pinned releases; reserved package name |
 | **Token theft / leakage** | Spec-named risk; every place code reads a token is a leak surface | Never handle the token; redact all secrets from logs, errors, tool results; short-lived + logout guidance |
-| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits` ceiling + bounded shot counts) + mandatory confirmation on billable submits + a sliding-window submission rate limit (covers the free lane) + serialized cloud mutations |
+| **Economic DoS (runaway spend)** | An injected loop could hammer `submit` | Server-side budget (`--max-credits` ceiling + bounded shot counts + bounded batch size) + mandatory confirmation on billable submits + a configurable sliding-window submission rate limit where each circuit of a batch consumes a slot (covers the free lane) + serialized cloud mutations |
+| **Context flooding (oversized responses)** | A noisy/many-qubit result or a long account history could flood the agent's context or the MCP transport | Top-`--max-outcomes` truncation with explicit metadata on every result; paginated list tools (one page + total count, `limit` ≤ 500) |
 | **Path / config exfiltration** | If any tool touches the filesystem (e.g. reading a QASM file) | Schema-validate + canonicalize/allowlist paths; block traversal and reads of `~/.ssh`, dotfiles, MCP config, the token cache |
 
 **Must-implement checklist:** server-enforced spend caps + confirmation on every `$`/`X` op · emulator +
@@ -220,8 +235,12 @@ tool-list mutation · masked errors + sanitized outputs.
 - Network/timeout → typed, actionable errors that never bait a blind retry loop; guidance never
   suggests retrying a `submit` (avoids double-spend). Waits are bounded (default 300 s, max 3600 s);
   on timeout the job keeps running and the error says how to poll it.
+- `nexus_submit_and_wait` polls the cheap status-only endpoint with exponential backoff (2 s → 15 s
+  cap) instead of the SDK's blocking `wait_for` (no progress hook), reporting status + queue position
+  through MCP progress on every poll so a queued job never looks hung; terminal failure statuses
+  (ERROR/CANCELLED/TERMINATED/DEPLETED) surface as actionable errors immediately.
 - All blocking SDK calls run in worker threads, so a slow or hung Nexus call can never freeze the
-  server's event loop (the SDK's `jobs.wait_for` runs its own `asyncio.run`, which *requires* a
+  server's event loop (parts of the SDK run their own `asyncio.run`, which *requires* a
   loop-free thread).
 - All `qnexus`/network exceptions mapped to short, redacted `ToolError` messages at the client
   boundary; anything unmapped is masked by `mask_error_details`. Known case: the Nexus jobs LIST
@@ -263,6 +282,8 @@ qnexus-mcp/
     client.py                  # NexusClient Protocol + qnexus wrapper; error translation
     context.py                 # per-server state binding + thread offload for blocking SDK calls
     guards.py                  # SpendGuard, project allowlist, rate limit, idempotency
+    results.py                 # pure result shaping: top-N outcome truncation + batch items
+    polling.py                 # progress-reporting job poll loop (status GETs + backoff)
     server.py                  # FastMCP app; registers only permitted tools
     tools/{read,execute,manage,destructive}.py
     py.typed
