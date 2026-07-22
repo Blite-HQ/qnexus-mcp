@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import Context
+from pydantic import Field
 
 from ..context import call_sync, client_of, config_of
 from ..permissions import ToolSpec
 from ..results import shape_result
+
+# Bound list-page sizes so an account with a long history can never produce an unbounded response.
+Limit = Annotated[int, Field(ge=1, le=500)]
 
 
 async def nexus_auth_status(ctx: Context) -> dict[str, Any]:
@@ -38,9 +42,16 @@ async def nexus_device_status(ctx: Context, device: str) -> dict[str, Any]:
     return await call_sync(client_of(ctx).device_status, device)
 
 
-async def nexus_list_projects(ctx: Context) -> list[dict[str, Any]]:
-    """List Nexus projects visible to the user."""
-    return await call_sync(client_of(ctx).list_projects)
+async def nexus_list_projects(
+    ctx: Context, limit: Limit = 50, name_like: str | None = None, archived: bool = False
+) -> dict[str, Any]:
+    """List Nexus projects visible to the user (one page of up to `limit`, plus the total count).
+
+    Optional `name_like` substring filter; set `archived` to list archived projects instead.
+    """
+    return await call_sync(
+        client_of(ctx).list_projects, limit=limit, name_like=name_like, archived=archived
+    )
 
 
 async def nexus_get_quota(ctx: Context) -> list[dict[str, Any]]:
@@ -48,13 +59,22 @@ async def nexus_get_quota(ctx: Context) -> list[dict[str, Any]]:
     return await call_sync(client_of(ctx).get_quota)
 
 
-async def nexus_list_jobs(ctx: Context) -> list[dict[str, Any]]:
-    """List jobs visible to the user.
+async def nexus_list_jobs(
+    ctx: Context,
+    limit: Limit = 50,
+    project: str | None = None,
+    status: str | None = None,
+    name_like: str | None = None,
+) -> dict[str, Any]:
+    """List jobs visible to the user (one page of up to `limit`, plus the total count).
 
-    Occasionally returns a Nexus-side server error unrelated to your request; if so, use
-    nexus_job_status / nexus_get_results by id instead of retrying this call.
+    Optional filters: exact `project` name, `status` (e.g. COMPLETED, RUNNING, ERROR), and a
+    `name_like` substring. Occasionally returns a Nexus-side server error unrelated to your
+    request; if so, use nexus_job_status / nexus_get_results by id instead of retrying this call.
     """
-    return await call_sync(client_of(ctx).list_jobs)
+    return await call_sync(
+        client_of(ctx).list_jobs, limit=limit, project=project, status=status, name_like=name_like
+    )
 
 
 async def nexus_job_status(ctx: Context, job_id: str) -> dict[str, Any]:

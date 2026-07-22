@@ -35,10 +35,18 @@ class NexusClient(Protocol):
     def whoami(self) -> dict[str, Any]: ...
     def list_devices(self) -> list[dict[str, Any]]: ...
     def device_status(self, device: str) -> dict[str, Any]: ...
-    def list_projects(self) -> list[dict[str, Any]]: ...
+    def list_projects(
+        self, limit: int = 50, name_like: str | None = None, archived: bool = False
+    ) -> dict[str, Any]: ...
     def get_quota(self) -> list[dict[str, Any]]: ...
     def check_quota(self, name: str) -> bool: ...
-    def list_jobs(self) -> list[dict[str, Any]]: ...
+    def list_jobs(
+        self,
+        limit: int = 50,
+        project: str | None = None,
+        status: str | None = None,
+        name_like: str | None = None,
+    ) -> dict[str, Any]: ...
     def job_status(self, job_id: str) -> dict[str, Any]: ...
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
     def get_results(self, job_id: str) -> dict[str, Any]: ...
@@ -218,6 +226,33 @@ def _records(dataframable: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _page(iterator: Any, limit: int) -> dict[str, Any]:
+    """Collect one page from a NexusIterator without draining every page.
+
+    `get_all(page_size=limit)` + islice = exactly one HTTP GET for the items ( .df()/.list()
+    would walk ALL pages -- the unbounded-response problem this replaces); .count() is one cheap
+    /meta/count GET honoring the same filters.
+    """
+    import itertools
+
+    total = int(iterator.count())
+    items = [
+        redact(ref.df().to_dict(orient="records")[0]) for ref in itertools.islice(iterator, limit)
+    ]
+    return {"items": items, "returned": len(items), "total": total}
+
+
+def _job_status_filter(status: str) -> list[Any]:
+    """Validate a status string against the SDK's JobStatusEnum, or raise an actionable error."""
+    from qnexus.models import JobStatusEnum
+
+    try:
+        return [JobStatusEnum[status.upper()]]
+    except KeyError:
+        valid = ", ".join(member.name for member in JobStatusEnum)
+        raise ToolError(f"Unknown job status '{status}'. Valid statuses: {valid}.") from None
+
+
 class QnexusClient:
     """Real implementation over the qnexus SDK (read + execute paths verified live 2026-07-21).
 
@@ -280,8 +315,13 @@ class QnexusClient:
         return out
 
     @_mapped
-    def list_projects(self) -> list[dict[str, Any]]:
-        return _records(_qnx().projects.get_all())
+    def list_projects(
+        self, limit: int = 50, name_like: str | None = None, archived: bool = False
+    ) -> dict[str, Any]:
+        filters: dict[str, Any] = {"page_size": limit, "is_archived": archived}
+        if name_like is not None:
+            filters["name_like"] = name_like
+        return _page(_qnx().projects.get_all(**filters), limit)
 
     @_mapped
     def get_quota(self) -> list[dict[str, Any]]:
@@ -292,11 +332,25 @@ class QnexusClient:
         return bool(_qnx().quotas.check_quota(name))
 
     @_mapped
-    def list_jobs(self) -> list[dict[str, Any]]:
+    def list_jobs(
+        self,
+        limit: int = 50,
+        project: str | None = None,
+        status: str | None = None,
+        name_like: str | None = None,
+    ) -> dict[str, Any]:
         # NOTE: jobs.get_all() (the LIST endpoint) was observed returning 500 / server-side
         # timeouts on the event account (2026-07-21). submit/status/results-by-id are unaffected.
         # _tool_error turns that 500 into a clear "Nexus-side issue, don't retry-loop" message.
-        return _records(_qnx().jobs.get_all())
+        qnx = _qnx()
+        filters: dict[str, Any] = {"page_size": limit}
+        if project is not None:
+            filters["project"] = qnx.projects.get(name=project)  # exact match; raises on 0 or >1
+        if status is not None:
+            filters["job_status"] = _job_status_filter(status)
+        if name_like is not None:
+            filters["name_like"] = name_like
+        return _page(qnx.jobs.get_all(**filters), limit)
 
     @_mapped
     def job_status(self, job_id: str) -> dict[str, Any]:

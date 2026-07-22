@@ -125,6 +125,87 @@ def test_list_devices_strips_non_json_serializable_backend_info(monkeypatch):
     json.dumps(rows)  # must not raise: this is exactly what MCP structured_content needs
 
 
+class _FakePageIterator:
+    """NexusIterator stand-in: yields refs whose .df() is a one-row frame; counts consumption."""
+
+    def __init__(self, rows, total):
+        self._rows = rows
+        self._total = total
+        self.consumed = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.consumed >= len(self._rows):
+            raise StopIteration
+        row = self._rows[self.consumed]
+        self.consumed += 1
+        return types.SimpleNamespace(
+            df=lambda row=row: types.SimpleNamespace(to_dict=lambda orient: [row])
+        )
+
+    def count(self):
+        return self._total
+
+
+def _patch_get_all(monkeypatch, iterator, attr="jobs"):
+    calls = {}
+
+    def get_all(**kwargs):
+        calls.update(kwargs)
+        return iterator
+
+    fake_qnx = types.SimpleNamespace(**{attr: types.SimpleNamespace(get_all=get_all)})
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: fake_qnx)
+    return calls
+
+
+def test_list_jobs_requests_single_page_of_limit_size(monkeypatch):
+    it = _FakePageIterator([{"id": f"j{i}"} for i in range(10)], total=40)
+    calls = _patch_get_all(monkeypatch, it)
+    out = QnexusClient().list_jobs(limit=5)
+    assert calls["page_size"] == 5
+    assert it.consumed <= 5  # islice stops at the limit; never drains further pages
+    assert out["returned"] == 5
+    assert out["total"] == 40
+    assert out["items"][0] == {"id": "j0"}
+
+
+def test_list_jobs_maps_status_name_to_enum(monkeypatch):
+    from qnexus.models import JobStatusEnum
+
+    it = _FakePageIterator([], total=0)
+    calls = _patch_get_all(monkeypatch, it)
+    QnexusClient().list_jobs(status="running")
+    assert calls["job_status"] == [JobStatusEnum.RUNNING]
+
+
+def test_list_jobs_invalid_status_raises_tool_error_listing_valid_names(monkeypatch):
+    it = _FakePageIterator([], total=0)
+    _patch_get_all(monkeypatch, it)
+    with pytest.raises(ToolError, match="COMPLETED") as exc:
+        QnexusClient().list_jobs(status="bogus")
+    assert "bogus" in str(exc.value)
+
+
+def test_list_jobs_forwards_name_like(monkeypatch):
+    it = _FakePageIterator([], total=0)
+    calls = _patch_get_all(monkeypatch, it)
+    QnexusClient().list_jobs(name_like="sweep")
+    assert calls["name_like"] == "sweep"
+
+
+def test_list_projects_passes_name_like_and_archived(monkeypatch):
+    it = _FakePageIterator([{"name": "demo"}], total=1)
+    calls = _patch_get_all(monkeypatch, it, attr="projects")
+    out = QnexusClient().list_projects(limit=10, name_like="dem", archived=True)
+    assert calls["page_size"] == 10
+    assert calls["name_like"] == "dem"
+    assert calls["is_archived"] is True
+    assert out == {"items": [{"name": "demo"}], "returned": 1, "total": 1}
+
+
 _VALID_QASM = (
     'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[1];\ncreg c[1];\nh q[0];\nmeasure q[0] -> c[0];\n'
 )

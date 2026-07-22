@@ -409,28 +409,56 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "List jobs visible to the user.\n\nOccasionally returns a Nexus-side server error unrelated to your request; if so, use\nnexus_job_status / nexus_get_results by id instead of retrying this call.",
+    "description": "List jobs visible to the user (one page of up to `limit`, plus the total count).\n\nOptional filters: exact `project` name, `status` (e.g. COMPLETED, RUNNING, ERROR), and a\n`name_like` substring. Occasionally returns a Nexus-side server error unrelated to your\nrequest; if so, use nexus_job_status / nexus_get_results by id instead of retrying this call.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "limit": {
+          "default": 50,
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name_like": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
       "type": "object"
     },
     "name": "nexus_list_jobs",
     "outputSchema": {
-      "properties": {
-        "result": {
-          "items": {
-            "additionalProperties": true,
-            "type": "object"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "result"
-      ],
-      "type": "object",
-      "x-fastmcp-wrap-result": true
+      "additionalProperties": true,
+      "type": "object"
     }
   },
   {
@@ -440,28 +468,38 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "List Nexus projects visible to the user.",
+    "description": "List Nexus projects visible to the user (one page of up to `limit`, plus the total count).\n\nOptional `name_like` substring filter; set `archived` to list archived projects instead.",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "archived": {
+          "default": false,
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name_like": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
       "type": "object"
     },
     "name": "nexus_list_projects",
     "outputSchema": {
-      "properties": {
-        "result": {
-          "items": {
-            "additionalProperties": true,
-            "type": "object"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "result"
-      ],
-      "type": "object",
-      "x-fastmcp-wrap-result": true
+      "additionalProperties": true,
+      "type": "object"
     }
   },
   {

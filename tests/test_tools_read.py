@@ -30,9 +30,22 @@ async def test_list_devices_returns_client_data(fake_client, make_ctx):
     assert out == [{"name": "H2-1LE", "status": "online", "billable": False}]
 
 
-async def test_list_jobs_returns_client_data(fake_client, make_ctx):
+async def test_list_jobs_returns_paginated_client_data(fake_client, make_ctx):
     out = await nexus_list_jobs(make_ctx(fake_client))
-    assert out == [{"id": "j1", "status": "COMPLETED"}]
+    assert out == {"items": [{"id": "j1", "status": "COMPLETED"}], "returned": 1, "total": 1}
+
+
+async def test_list_jobs_forwards_filters_to_client(make_ctx):
+    calls = {}
+
+    class RecordingClient(FakeClient):
+        def list_jobs(self, limit=50, project=None, status=None, name_like=None):
+            calls.update(limit=limit, project=project, status=status, name_like=name_like)
+            return {"items": [], "returned": 0, "total": 0}
+
+    ctx = make_ctx(RecordingClient())
+    await nexus_list_jobs(ctx, limit=10, project="demo", status="RUNNING", name_like="sweep")
+    assert calls == {"limit": 10, "project": "demo", "status": "RUNNING", "name_like": "sweep"}
 
 
 # --- result shaping: top-N truncation + batch items (audit finding #1) ------------------------

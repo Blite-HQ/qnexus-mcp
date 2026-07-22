@@ -31,8 +31,8 @@ class FakeClient:
     def device_status(self, device):
         return {"device": device, "state": "online"}
 
-    def list_projects(self):
-        return [{"id": "p1", "name": "demo"}]
+    def list_projects(self, limit=50, name_like=None, archived=False):
+        return {"items": [{"id": "p1", "name": "demo"}], "returned": 1, "total": 1}
 
     def get_quota(self):
         return [{"name": "simulation", "used": 0, "limit": 100}]
@@ -40,8 +40,8 @@ class FakeClient:
     def check_quota(self, name):
         return self._quota_ok
 
-    def list_jobs(self):
-        return [{"id": "j1", "status": "COMPLETED"}]
+    def list_jobs(self, limit=50, project=None, status=None, name_like=None):
+        return {"items": [{"id": "j1", "status": "COMPLETED"}], "returned": 1, "total": 1}
 
     def job_status(self, job_id):
         return {"id": job_id, "status": "COMPLETED"}
