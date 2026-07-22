@@ -53,10 +53,10 @@ class FakeClient:
         counts_list = [{"00": 51, "11": 49} for _ in range(self._n_result_items)]
         return {"id": job_id, "counts_list": counts_list}
 
-    def estimate_cost(self, circuit, n_shots, device):
+    def estimate_cost(self, circuit, n_shots, device, project=None):
         return 0.0 if device.upper().endswith("LE") else 3.0
 
-    def estimate_cost_batch(self, circuits, n_shots, device):
+    def estimate_cost_batch(self, circuits, n_shots, device, project=None):
         return 0.0 if device.upper().endswith("LE") else 3.0 * len(circuits)
 
     def compile(self, circuit, device, project=None):

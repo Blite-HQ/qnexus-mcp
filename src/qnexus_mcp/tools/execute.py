@@ -42,14 +42,20 @@ BatchCircuits = Annotated[list[str], Field(min_length=1, max_length=MAX_BATCH_SI
 
 
 async def nexus_estimate_cost(
-    ctx: Context, circuit: str, n_shots: Shots = 100, device: str = DEFAULT_DEVICE
+    ctx: Context,
+    circuit: str,
+    n_shots: Shots = 100,
+    device: str = DEFAULT_DEVICE,
+    project: str | None = None,
 ) -> dict[str, Any]:
     """Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).
 
-    Defaults to the free H2-1LE emulator, which always estimates 0 HQC.
+    Defaults to the free H2-1LE emulator, which always estimates 0 HQC. The estimation job runs
+    inside `project` (default project when omitted) and counts against the submission rate limit.
     """
-    check_project_allowed(config_of(ctx), None)
-    cost = await call_sync(client_of(ctx).estimate_cost, circuit, n_shots, device)
+    check_project_allowed(config_of(ctx), project)
+    rate_limiter_of(ctx).check()  # circuits.cost enqueues a real (free) syntax-check job
+    cost = await call_sync(client_of(ctx).estimate_cost, circuit, n_shots, device, project=project)
     return {"device": device, "n_shots": n_shots, "estimated_hqc": cost}
 
 
@@ -85,7 +91,7 @@ async def nexus_submit(
     guard.precheck(device)
     rate_limiter_of(ctx).check()
     estimated = (
-        await call_sync(client.estimate_cost, circuit, n_shots, device)
+        await call_sync(client.estimate_cost, circuit, n_shots, device, project=project)
         if is_billable(device)
         else 0.0
     )
@@ -146,7 +152,9 @@ async def nexus_submit_batch(
     rate_limiter_of(ctx).check(count=len(circuits))
     shots_list = [n_shots] * len(circuits)
     estimated = (
-        await call_sync(client.estimate_cost_batch, list(circuits), shots_list, device)
+        await call_sync(
+            client.estimate_cost_batch, list(circuits), shots_list, device, project=project
+        )
         if is_billable(device)
         else 0.0
     )

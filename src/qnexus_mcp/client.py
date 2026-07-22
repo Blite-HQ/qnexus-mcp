@@ -50,9 +50,11 @@ class NexusClient(Protocol):
     def job_status(self, job_id: str) -> dict[str, Any]: ...
     def job_cost(self, job_id: str) -> dict[str, Any]: ...
     def get_results(self, job_id: str) -> dict[str, Any]: ...
-    def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float: ...
+    def estimate_cost(
+        self, circuit: str, n_shots: int, device: str, project: str | None = None
+    ) -> float: ...
     def estimate_cost_batch(
-        self, circuits: list[str], n_shots: list[int], device: str
+        self, circuits: list[str], n_shots: list[int], device: str, project: str | None = None
     ) -> float: ...
     def compile(self, circuit: str, device: str, project: str | None = None) -> dict[str, Any]: ...
     def submit(
@@ -418,17 +420,22 @@ class QnexusClient:
         return float(cost or 0.0)
 
     @_mapped
-    def estimate_cost(self, circuit: str, n_shots: int, device: str) -> float:
+    def estimate_cost(
+        self, circuit: str, n_shots: int, device: str, project: str | None = None
+    ) -> float:
+        """Estimate within the TARGET project, so the --projects allowlist stays airtight."""
         qnx = _qnx()
-        circ_ref, _ = self._upload(qnx, circuit, None)
+        circ_ref, _ = self._upload(qnx, circuit, project)
         cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
         return self._require_estimate(cost, device)
 
     @_mapped
-    def estimate_cost_batch(self, circuits: list[str], n_shots: list[int], device: str) -> float:
+    def estimate_cost_batch(
+        self, circuits: list[str], n_shots: list[int], device: str, project: str | None = None
+    ) -> float:
         """Aggregate HQC estimate for a batch (circuits.cost accepts lists, returns one total)."""
         qnx = _qnx()
-        circ_refs, _ = self._upload_many(qnx, circuits, None)
+        circ_refs, _ = self._upload_many(qnx, circuits, project)
         cost = qnx.circuits.cost(circ_refs, n_shots, qnx.QuantinuumConfig(device_name=device))
         return self._require_estimate(cost, device)
 

@@ -205,7 +205,7 @@ async def test_flag_precheck_runs_before_estimation(fake_client):
         def __getattr__(self, item):
             return getattr(fake_client, item)
 
-        def estimate_cost(self, circuit, n_shots, device):
+        def estimate_cost(self, circuit, n_shots, device, project=None):
             calls.append("estimate")
             return 3.0
 

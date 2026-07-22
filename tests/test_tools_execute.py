@@ -11,6 +11,7 @@ from qnexus_mcp.server import build_server
 from qnexus_mcp.tools.execute import (
     EXECUTE_SPECS,
     MAX_BATCH_SIZE,
+    nexus_estimate_cost,
     nexus_submit,
     nexus_submit_and_wait,
     nexus_submit_batch,
@@ -79,6 +80,62 @@ def test_execute_specs_shape():
     assert all(s.toolset == "execute" and not s.read_only for s in EXECUTE_SPECS)
     by_name = {s.name: s for s in EXECUTE_SPECS}
     assert by_name["nexus_submit_batch"].is_spend
+
+
+# --- estimate: project targeting + rate limiting (review findings M2/M5) ----------------------
+
+
+async def test_estimate_cost_counts_against_rate_limit(fake_client):
+    # circuits.cost enqueues a real (free) syntax-check job, so it is submission pressure too.
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), max_submissions_per_minute=1)
+    ctx = _ctx(fake_client, cfg)
+    await nexus_estimate_cost(ctx, circuit="x")
+    with pytest.raises(RateLimited):
+        await nexus_estimate_cost(ctx, circuit="x")
+
+
+async def test_estimate_cost_checks_allowlist_against_its_target_project(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), projects=frozenset({"sandbox"}))
+    with pytest.raises(ProjectDenied):
+        await nexus_estimate_cost(_ctx(fake_client, cfg), circuit="x", project="other")
+    out = await nexus_estimate_cost(_ctx(fake_client, cfg), circuit="x", project="sandbox")
+    assert out["estimated_hqc"] == 0.0
+
+
+async def test_submit_estimates_within_the_target_project(fake_client):
+    # The estimate must upload/cost inside the SAME project the submit targets, or the
+    # --projects allowlist is bypassed via the default project.
+    recorded = {}
+
+    class TrackingClient:
+        def __getattr__(self, item):
+            return getattr(fake_client, item)
+
+        def estimate_cost(self, circuit, n_shots, device, project=None):
+            recorded["project"] = project
+            return 1.0
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=10.0)
+    await nexus_submit(_ctx(TrackingClient(), cfg), circuit="x", device="H2-1E", project="teamA")
+    assert recorded["project"] == "teamA"
+
+
+async def test_submit_batch_estimates_within_the_target_project(fake_client):
+    recorded = {}
+
+    class TrackingClient:
+        def __getattr__(self, item):
+            return getattr(fake_client, item)
+
+        def estimate_cost_batch(self, circuits, n_shots, device, project=None):
+            recorded["project"] = project
+            return 1.0
+
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), allow_spend=True, max_credits=10.0)
+    await nexus_submit_batch(
+        _ctx(TrackingClient(), cfg), circuits=["a", "b"], device="H2-1E", project="teamA"
+    )
+    assert recorded["project"] == "teamA"
 
 
 # --- batch submission (audit finding #2) ------------------------------------------------------

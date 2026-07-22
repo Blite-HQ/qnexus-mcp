@@ -217,6 +217,7 @@ class _RecordingBatchQnx:
     def __init__(self, cost=0.0):
         self.execute_calls = []
         self.cost_calls = []
+        self.project_names = []
         self._cost = cost
 
     class QuantinuumConfig:
@@ -225,7 +226,11 @@ class _RecordingBatchQnx:
 
     @property
     def projects(self):
-        return types.SimpleNamespace(get_or_create=lambda name, description=None: f"proj:{name}")
+        def get_or_create(name, description=None):
+            self.project_names.append(name)
+            return f"proj:{name}"
+
+        return types.SimpleNamespace(get_or_create=get_or_create)
 
     @property
     def circuits(self):
@@ -279,6 +284,20 @@ def test_estimate_cost_batch_returns_aggregate_float(monkeypatch):
     assert cost == 7.5
     (refs, n_shots, device) = qnx.cost_calls[0]
     assert len(refs) == 2 and n_shots == [10, 10] and device == "H2-1E"
+
+
+def test_estimate_cost_uploads_into_the_target_project(monkeypatch):
+    qnx = _RecordingBatchQnx(cost=1.0)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    QnexusClient().estimate_cost(_VALID_QASM, 10, "H2-1E", project="teamA")
+    assert qnx.project_names == ["teamA"]
+
+
+def test_estimate_cost_batch_uploads_into_the_target_project(monkeypatch):
+    qnx = _RecordingBatchQnx(cost=1.0)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    QnexusClient().estimate_cost_batch([_VALID_QASM], [10], "H2-1E", project="teamA")
+    assert qnx.project_names == ["teamA"]
 
 
 def test_estimate_cost_batch_refuses_none_estimate_on_billable_device(monkeypatch):

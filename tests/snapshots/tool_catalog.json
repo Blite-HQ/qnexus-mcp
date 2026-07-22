@@ -233,7 +233,7 @@
       "openWorldHint": true,
       "readOnlyHint": false
     },
-    "description": "Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).\n\nDefaults to the free H2-1LE emulator, which always estimates 0 HQC.",
+    "description": "Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).\n\nDefaults to the free H2-1LE emulator, which always estimates 0 HQC. The estimation job runs\ninside `project` (default project when omitted) and counts against the submission rate limit.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -249,6 +249,17 @@
           "maximum": 100000,
           "minimum": 1,
           "type": "integer"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
