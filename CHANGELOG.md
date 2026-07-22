@@ -5,6 +5,8 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-21
+
 ### Added
 
 - **Read toolset** (always on): `nexus_auth_status`, `nexus_whoami`, `nexus_list_devices`,
@@ -25,7 +27,21 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 - Secret redaction (keys and values) and masked tool errors; SDK/network failures are translated into
   short, actionable, redacted messages (auth → "run `qnx login`", Nexus 5xx → "Nexus-side issue, do
   not retry in a loop").
+- Server-level `instructions`, surfaced to the connecting agent at the MCP handshake: check auth
+  first, how to tell an agent-fixable guard error from one that needs the human, the known-flaky
+  `nexus_list_jobs` endpoint, and a suggested end-to-end flow for running a circuit.
 - Snapshot test freezing the full agent-facing tool catalog.
+
+### Fixed
+
+- `nexus_list_devices` now returns plain, JSON-safe fields instead of a raw pytket object the MCP
+  structured-output layer couldn't serialize.
+- Malformed OpenQASM input now names the exact syntax problem instead of a generic failure.
+- Looking up a job by an unknown id now gives the same actionable "no match, list to find the right
+  one" message as an unknown project, instead of an opaque error.
+- `SpendGuard` reports every missing launch flag at once (e.g. `--allow-spend` and `--allow-hardware`
+  together), so one server restart covers it instead of discovering the second requirement only after
+  fixing the first.
 
 ### Security
 
@@ -35,11 +51,16 @@ and [Conventional Commits](https://www.conventionalcommits.org).
   lookup; an ambiguous or missing name aborts instead of acting.
 - Blocking SDK calls run in worker threads with bounded waits (default 300 s), so a slow or hung Nexus
   call can never freeze the server or hang the session.
-- CI/publish workflows run with least-privilege tokens and actions pinned to commit SHAs; releases
-  publish to PyPI exclusively via Trusted Publishing (OIDC, no stored tokens); Dependabot +
-  `osv-scanner` watch the dependency tree.
+- CI/publish workflows run with least-privilege tokens and actions pinned to commit SHAs; CI runners are
+  further hardened with `step-security/harden-runner`, and a coverage floor guards against a large
+  untested regression; releases publish to PyPI exclusively via Trusted Publishing (OIDC, no stored
+  tokens); Dependabot + `osv-scanner` watch the dependency tree; `main` is protected by a repository
+  ruleset (required CI checks, no force-push, no deletion).
 
 ### Verified
 
 - Read and execute paths verified against live Nexus (2026-07-21): a Bell circuit compiled and ran on the
   free `H2-1LE` emulator with correct results.
+- The full read toolset verified against a real MCP client (not mocks) over the actual stdio protocol,
+  including a fresh, independent agent exercising the auth, error-handling, and guard-rail behavior
+  described in the server's `instructions`.
