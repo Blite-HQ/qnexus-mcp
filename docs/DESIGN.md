@@ -246,7 +246,13 @@ qnexus-mcp/
   .pre-commit-config.yaml
   .github/
     workflows/{ci.yml,publish.yml}   # ci: ruff+mypy+pytest matrix 3.10–3.13 + osv-scanner; publish: PyPI OIDC + registry
-    ISSUE_TEMPLATE/…, PULL_REQUEST_TEMPLATE.md, dependabot.yml
+    ISSUE_TEMPLATE/…, PULL_REQUEST_TEMPLATE.md, dependabot.yml, CODEOWNERS
+  docs/
+    DESIGN.md                  # this document
+    PUBLISHING.md               # maintainer runbook: PyPI/registry setup, releases, the public flip
+    research/                   # primary-source research the design derives from
+  scripts/
+    post-flip-harden.sh         # one-shot repo hardening, run right after the public flip
   src/qnexus_mcp/
     __init__.py
     cli.py                     # console entry point
