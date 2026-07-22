@@ -16,6 +16,8 @@ from typing import Any
 import anyio
 from fastmcp.exceptions import ToolError
 
+from .sanitize import redact
+
 # Failure statuses that end a poll immediately. CANCELLING and RETRYING are transient states in
 # qnexus 0.46's JobStatusEnum and keep polling.
 TERMINAL_FAILURES = frozenset({"ERROR", "CANCELLED", "TERMINATED", "DEPLETED"})
@@ -23,6 +25,9 @@ TERMINAL_FAILURES = frozenset({"ERROR", "CANCELLED", "TERMINATED", "DEPLETED"})
 POLL_INITIAL_INTERVAL = 2.0
 POLL_BACKOFF_FACTOR = 1.5
 POLL_MAX_INTERVAL = 15.0
+# One network blip must not abort a wait on an ALREADY-submitted job (that error message would
+# bait a duplicate submit). Give up only after this many consecutive status-check failures.
+MAX_CONSECUTIVE_STATUS_FAILURES = 3
 
 StatusFn = Callable[[], Awaitable[dict[str, Any]]]
 ReportFn = Callable[[float, float, str], Awaitable[None]]
@@ -51,8 +56,31 @@ async def poll_job(
     """Poll until COMPLETED (returns the final status), a terminal failure, or the deadline."""
     start = clock()
     interval = initial
+    failures = 0
     while True:
-        status = await status_fn()
+        try:
+            status = await status_fn()
+        except Exception as exc:
+            failures += 1
+            if failures >= MAX_CONSECUTIVE_STATUS_FAILURES:
+                detail = str(redact(str(exc)))[:200]
+                raise ToolError(
+                    f"Lost contact with Nexus while waiting for job {job_id} ({failures} "
+                    f"consecutive status checks failed; last error: {detail}). The job was "
+                    "ALREADY SUBMITTED and may still be running. Do not resubmit; poll "
+                    "nexus_job_status and fetch nexus_get_results when it is COMPLETED."
+                ) from exc
+            remaining = timeout - (clock() - start)
+            if remaining <= 0:
+                raise ToolError(
+                    f"Timed out after {timeout}s waiting for job {job_id}. The job is still "
+                    "running on Nexus. Do not resubmit; poll nexus_job_status and fetch "
+                    "nexus_get_results when it is COMPLETED."
+                ) from exc
+            await sleep(min(interval, remaining))
+            interval = min(interval * factor, cap)
+            continue
+        failures = 0
         state = str(status.get("status", "")).upper()
         elapsed = clock() - start
         await report(min(elapsed, timeout), timeout, _describe(status))

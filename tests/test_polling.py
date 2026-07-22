@@ -26,7 +26,10 @@ class _Env:
         self.reports.append((progress, total, message))
 
     async def status_fn(self):
-        return next(self._statuses)
+        item = next(self._statuses)
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 def _poll(env, timeout=300.0, **kwargs):
@@ -96,3 +99,37 @@ async def test_poll_timeout_message_says_job_still_running_do_not_resubmit():
         await _poll(env, timeout=3.0, initial=2.0)
     assert "Do not resubmit" in str(exc.value)
     assert "nexus_job_status" in str(exc.value)
+
+
+# --- transient status failures (review finding: one blip must not abort a submitted job) ------
+
+
+async def test_poll_survives_a_transient_status_failure():
+    env = _Env([ToolError("The request to Nexus timed out"), {"status": "COMPLETED"}])
+    out = await _poll(env)
+    assert out["status"] == "COMPLETED"
+
+
+async def test_poll_failure_counter_resets_after_a_successful_poll():
+    env = _Env(
+        [
+            ToolError("blip 1"),
+            ToolError("blip 2"),
+            {"status": "QUEUED"},
+            ToolError("blip 3"),
+            ToolError("blip 4"),
+            {"status": "COMPLETED"},
+        ]
+    )
+    out = await _poll(env)
+    assert out["status"] == "COMPLETED"
+
+
+async def test_poll_gives_actionable_error_after_consecutive_status_failures():
+    env = _Env([ToolError("network down")] * 3)
+    with pytest.raises(ToolError, match="ALREADY SUBMITTED") as exc:
+        await _poll(env)
+    message = str(exc.value)
+    assert "Do not resubmit" in message
+    assert "network down" in message  # the underlying cause is surfaced
+    assert "j1" in message
