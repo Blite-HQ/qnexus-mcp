@@ -300,7 +300,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Return counts/results for a completed job by id.",
+    "description": "Return measurement counts for a completed job by id.\n\nCounts are capped at the top --max-outcomes outcomes by frequency; total_outcomes /\nomitted_outcomes / omitted_shots report any truncation. Multi-circuit (batch) jobs return\none entry per circuit under `items`, in submission order.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

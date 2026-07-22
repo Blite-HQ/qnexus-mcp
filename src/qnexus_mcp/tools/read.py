@@ -13,8 +13,9 @@ from typing import Any
 
 from fastmcp import Context
 
-from ..context import call_sync, client_of
+from ..context import call_sync, client_of, config_of
 from ..permissions import ToolSpec
+from ..results import shape_result
 
 
 async def nexus_auth_status(ctx: Context) -> dict[str, Any]:
@@ -67,8 +68,14 @@ async def nexus_job_cost(ctx: Context, job_id: str) -> dict[str, Any]:
 
 
 async def nexus_get_results(ctx: Context, job_id: str) -> dict[str, Any]:
-    """Return counts/results for a completed job by id."""
-    return await call_sync(client_of(ctx).get_results, job_id)
+    """Return measurement counts for a completed job by id.
+
+    Counts are capped at the top --max-outcomes outcomes by frequency; total_outcomes /
+    omitted_outcomes / omitted_shots report any truncation. Multi-circuit (batch) jobs return
+    one entry per circuit under `items`, in submission order.
+    """
+    raw = await call_sync(client_of(ctx).get_results, job_id)
+    return shape_result(job_id, raw["counts_list"], config_of(ctx).max_outcomes)
 
 
 def _spec(fn: Callable[..., Any], idempotent: bool = True) -> ToolSpec:
