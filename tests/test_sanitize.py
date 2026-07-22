@@ -31,3 +31,55 @@ def test_redacts_api_key_and_signature_keys():
     assert out["api_key"] == "***"
     assert out["signature"] == "***"
     assert out["device"] == "H2-1LE"
+
+
+# --- broadened value shapes (defense in depth: values under non-secret keys) ------------------
+
+
+def test_redacts_github_classic_and_fine_grained_tokens():
+    out = redact(
+        {
+            "msg": "push failed for ghp_abcdefghijklmnopqrst1234",
+            "msg2": "using github_pat_11ABCDEFG_abcdefghijklmnop",
+        }
+    )
+    assert out["msg"] == "***"
+    assert out["msg2"] == "***"
+
+
+def test_redacts_slack_xox_tokens():
+    assert redact("error from xoxb-123456789012-abcdefghijkl") == "***"
+
+
+def test_redacts_sk_prefixed_api_keys():
+    assert redact("sk-abcdefghijklmnopqrstuvwx") == "***"
+    assert redact("sk_live_abcdefghijklmnop") == "***"
+
+
+def test_redacts_aws_access_key_id():
+    assert redact("AKIAIOSFODNN7EXAMPLE") == "***"
+
+
+def test_redacts_secretish_key_value_pair_inside_string():
+    assert redact("rejected: api_key=hunter2secret is invalid") == "***"
+    assert redact("config had token: abcd1234efgh") == "***"
+
+
+def test_keeps_bitstring_count_keys_and_values():
+    counts = {"01010101010101010101": 12, "00000000000000000000": 88}
+    assert redact(counts) == counts
+    assert redact("0101010101010101010101010101") == "0101010101010101010101010101"
+
+
+def test_keeps_uuids():
+    u = "123e4567-e89b-12d3-a456-426614174000"
+    assert redact(u) == u
+
+
+def test_keeps_qasm_source_text():
+    qasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\ncreg c[2];\nrz(0.5) q[0];\n'
+    assert redact(qasm) == qasm
+
+
+def test_keeps_short_sk_prefixed_words():
+    assert redact("sk-limit") == "sk-limit"

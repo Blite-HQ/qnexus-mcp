@@ -26,11 +26,21 @@ _SECRET_KEY_HINTS = (
     "myqos",
 )
 
-# Redact a string VALUE if it looks like a secret: a JWT, a Bearer prefix, or a myqos cookie.
+# Redact a string VALUE if it looks like a secret. Defense in depth for values that arrive under
+# non-secret key names: only prefix-anchored token shapes with length floors (no entropy
+# heuristics), so legitimate payloads -- bitstring counts, UUIDs, QASM source -- never
+# false-positive.
 _SECRET_VALUE_RE = re.compile(
     r"(eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,})"  # JWT
     r"|(bearer\s+\S+)"  # Bearer <token>
-    r"|(myqos\w*)",  # Quantinuum session cookies
+    r"|(myqos\w*)"  # Quantinuum session cookies
+    r"|(ghp_[A-Za-z0-9]{20,})"  # GitHub classic PAT
+    r"|(github_pat_[A-Za-z0-9_]{20,})"  # GitHub fine-grained PAT
+    r"|(xox[baprs]-[A-Za-z0-9-]{10,})"  # Slack tokens
+    r"|(sk-[A-Za-z0-9_-]{20,})"  # sk- API keys (OpenAI/Anthropic style)
+    r"|(sk_(?:live|test)_[A-Za-z0-9]{10,})"  # Stripe secret keys
+    r"|(AKIA[0-9A-Z]{16})"  # AWS access key id
+    r"|((?:api[_-]?key|token|secret|passwd|password|credential)\s*[=:]\s*\S{8,})",  # key=value
     re.IGNORECASE,
 )
 
