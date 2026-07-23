@@ -10,3 +10,5 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# Local editor / MCP test configs (machine-specific; see scripts/dev-wheel-to-windows.sh)
+.vscode/
