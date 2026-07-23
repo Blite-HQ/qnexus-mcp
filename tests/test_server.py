@@ -32,3 +32,12 @@ def test_submit_batch_registered_only_with_execute_toolset(fake_client):
     assert "nexus_submit_batch" not in registered_tool_names(
         build_server(ServerConfig(), fake_client)
     )
+
+
+def test_server_reports_the_package_version_not_fastmcps(fake_client):
+    # Windows-testing finding: serverInfo.version told clients "3.4.4" (FastMCP's own
+    # version) instead of the qnexus-mcp release, breaking version-based debugging.
+    from importlib.metadata import version
+
+    server = build_server(ServerConfig(), fake_client)
+    assert str(server.version) == version("qnexus-mcp")

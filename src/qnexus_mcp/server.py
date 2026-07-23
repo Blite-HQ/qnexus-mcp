@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
 import anyio
 from fastmcp import FastMCP
 from fastmcp.tools import Tool
@@ -65,8 +67,22 @@ paging through everything.
 """
 
 
+def _package_version() -> str:
+    try:
+        return version("qnexus-mcp")
+    except PackageNotFoundError:  # pragma: no cover - only hits un-installed source checkouts
+        return "0.0.0-dev"
+
+
 def build_server(config: ServerConfig, client: NexusClient) -> FastMCP:
-    server = FastMCP("qnexus-mcp", instructions=_INSTRUCTIONS, mask_error_details=True)
+    # Without an explicit version, serverInfo.version reports FastMCP's own version (found
+    # live: clients showed "3.4.4"), which breaks version-based debugging of user reports.
+    server = FastMCP(
+        "qnexus-mcp",
+        instructions=_INSTRUCTIONS,
+        version=_package_version(),
+        mask_error_details=True,
+    )
     bind_state(server, client, config)
     for spec in select_tools(ALL_SPECS, config):
         a = annotations_for(spec)
