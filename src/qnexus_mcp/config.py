@@ -60,8 +60,20 @@ def _int_from(cli: int | None, env: Mapping[str, str], key: str, default: int) -
 
 
 def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig:
-    """Build a ServerConfig from CLI args (highest priority) then env vars."""
-    p = argparse.ArgumentParser(prog="qnexus-mcp", add_help=False)
+    """Build a ServerConfig from CLI args (highest priority) then env vars.
+
+    Parsing is STRICT: an unknown flag exits with a usage error instead of being silently
+    dropped. Found live on Windows: with parse_known_args, the typo `--project sandbox`
+    launched the server with NO allowlist at all -- a security flag failing open. --help works
+    (the process exits before any MCP handshake, so stdout is not yet the protocol channel).
+    """
+    # allow_abbrev=False: no implicit prefix matching either -- an abbreviation could silently
+    # bind to a different flag as new flags get added. Exact flags only.
+    p = argparse.ArgumentParser(
+        prog="qnexus-mcp",
+        description="MCP server for Quantinuum Nexus",
+        allow_abbrev=False,
+    )
     p.add_argument("--toolsets")
     p.add_argument("--allow-spend", action="store_true", default=None)
     p.add_argument("--allow-hardware", action="store_true", default=None)
@@ -70,7 +82,7 @@ def config_from_sources(argv: list[str], env: Mapping[str, str]) -> ServerConfig
     p.add_argument("--max-outcomes", type=int)
     p.add_argument("--max-submissions-per-minute", type=int)
     p.add_argument("--projects")
-    args, _ = p.parse_known_args(argv)
+    args = p.parse_args(argv)
 
     def flag(cli: bool | None, key: str, default: bool) -> bool:
         if cli is not None:

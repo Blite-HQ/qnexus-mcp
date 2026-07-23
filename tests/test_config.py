@@ -40,6 +40,22 @@ def test_read_is_forced_on_even_if_excluded():
     assert "read" in c.toolsets and "execute" in c.toolsets
 
 
+def test_help_flag_exits_cleanly_instead_of_being_swallowed():
+    # Windows-testing finding: add_help=False silently ate --help.
+    with pytest.raises(SystemExit) as exc:
+        config_from_sources(["--help"], env={})
+    assert exc.value.code == 0
+
+
+def test_unknown_flag_is_rejected_not_silently_ignored(capsys):
+    # Windows-testing finding (HIGH): parse_known_args silently dropped typos, so
+    # `--project sandbox` (missing the s) launched with NO allowlist at all -- fail-open.
+    with pytest.raises(SystemExit) as exc:
+        config_from_sources(["--project", "sandbox"], env={})
+    assert exc.value.code != 0
+    assert "unrecognized" in capsys.readouterr().err
+
+
 def test_bad_max_credits_env_raises():
     with pytest.raises(ValueError, match="must be a number"):
         config_from_sources([], env={"QNEXUS_MCP_MAX_CREDITS": "abc"})
