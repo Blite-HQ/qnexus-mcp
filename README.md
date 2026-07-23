@@ -14,54 +14,91 @@ wrapping the official [`qnexus`](https://github.com/Quantinuum/qnexus) Python SD
 Early development. **Read-only by default.** Design and rationale live in
 [`docs/DESIGN.md`](docs/DESIGN.md); the research behind it is in [`docs/research/`](docs/research/).
 
-## Install & run
+## Requirements
 
-Requires Python 3.10+ and [`uv`](https://docs.astral.sh/uv/).
+- Python 3.10+ and [`uv`](https://docs.astral.sh/uv/) (the `uvx` command). On Windows, note the
+  full path to `uvx.exe` (`where uvx` in a terminal) — GUI clients don't inherit your shell PATH.
+- A [Quantinuum Nexus](https://nexus.quantinuum.com) account.
 
-```bash
-uvx qnexus-mcp
-```
+## 1. Authenticate (once)
 
-For reproducible, auditable installs, **pin a version** — `uvx` resolves the latest PyPI release on
-every launch otherwise (`uv.lock` only applies to development, not to published wheels). Recommended
-for anything unattended:
-
-```bash
-uvx qnexus-mcp==0.1.0
-```
-
-## Authenticate (once)
-
-`qnexus-mcp` **never handles your Nexus token.** Authenticate out-of-band with the `qnexus` CLI:
+`qnexus-mcp` **never handles your Nexus token.** Authenticate out-of-band with the `qnexus` CLI
+(it opens your browser):
 
 ```bash
-qnx login
+uvx --from qnexus qnx login
 ```
 
 Inside Nexus JupyterHub, authentication is automatic; do not run `qnx login` there.
 
-## Configure your MCP client
+## 2. Add the server to your MCP client
 
-Add to your client's MCP config (Claude Code / Cursor / VS Code share this shape). Default is **read-only**:
+The launch command is the same everywhere — only the config file differs per client:
+
+```
+uvx qnexus-mcp==0.2.0                              # read-only (default)
+uvx qnexus-mcp==0.2.0 --toolsets read,execute      # + run circuits on the free H2-1LE emulator
+```
+
+**Pin a version** (`==0.2.0`): `uvx` otherwise resolves the latest PyPI release on every launch —
+unpinned installs are neither reproducible nor auditable. Avoid `0.1.0` on Windows: its first
+tool call hangs (fixed in 0.2.0).
+
+> **What to expect on startup:** the first ever launch downloads the quantum SDK stack (1–3 min);
+> every launch takes ~30 s before the server responds — the SDK is imported up front, before the
+> MCP handshake. "Waiting for server to respond to `initialize`" during that window is normal.
+
+### Claude Desktop
+
+Settings → Developer → Local MCP servers → **Edit Config** (always use this button — the
+Microsoft Store build keeps the file under `%LOCALAPPDATA%\Packages\Claude_*\...`, **not**
+`%APPDATA%\Claude`), then add:
 
 ```jsonc
 {
   "mcpServers": {
-    // pin to the latest release you have reviewed
-    "nexus": { "command": "uvx", "args": ["qnexus-mcp==0.1.0"] }
+    "nexus": {
+      "command": "C:\\Users\\<you>\\.local\\bin\\uvx.exe", // or plain "uvx" on macOS/Linux
+      "args": ["qnexus-mcp==0.2.0", "--toolsets", "read,execute"]
+    }
   }
 }
 ```
 
-To also allow running circuits (defaults to the free `H2-1LE` emulator):
+Then **quit Claude Desktop fully and reopen** — the config is only read at cold start, and
+closing the window leaves the old process running (tray icon → Quit, or
+`taskkill /F /IM claude.exe`).
+
+### VS Code
+
+Command Palette → `MCP: Open User Configuration` (or a workspace `.vscode/mcp.json`):
 
 ```jsonc
 {
-  "mcpServers": {
-    "nexus": { "command": "uvx", "args": ["qnexus-mcp==0.1.0", "--toolsets", "read,execute"] }
+  "servers": {
+    "nexus": {
+      "type": "stdio",
+      "command": "C:\\Users\\<you>\\.local\\bin\\uvx.exe", // or plain "uvx" on macOS/Linux
+      "args": ["qnexus-mcp==0.2.0", "--toolsets", "read,execute"]
+    }
   }
 }
 ```
+
+### Claude Code
+
+```bash
+claude mcp add nexus -- uvx qnexus-mcp==0.2.0 --toolsets read,execute
+```
+
+### Other MCP clients (Cursor, Codex, …)
+
+Same command; the config shape is one of the two JSON forms above (`mcpServers` vs
+`servers` + `"type": "stdio"`) — check your client's docs for which file to put it in.
+
+Something not working? See [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — it covers every
+failure mode observed in real client setups (wrong config path, slow first start, auth, rate
+limits, known Nexus-side errors).
 
 ## Configuration
 

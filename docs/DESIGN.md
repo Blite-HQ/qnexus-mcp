@@ -269,6 +269,7 @@ qnexus-mcp/
   docs/
     DESIGN.md                  # this document
     PUBLISHING.md               # maintainer runbook: PyPI/registry setup, releases, the public flip
+    TROUBLESHOOTING.md         # symptom-first user guide (built from research/05 friction log)
     research/                   # primary-source research the design derives from
   scripts/
     post-flip-harden.sh         # one-shot repo hardening, run right after the public flip
