@@ -3,9 +3,6 @@
 All notable changes are documented here. This project follows [Semantic Versioning](https://semver.org)
 and [Conventional Commits](https://www.conventionalcommits.org).
 
-## [Unreleased]
-
-## [0.1.0] - 2026-07-21
 
 ### Added
 
@@ -64,3 +61,54 @@ and [Conventional Commits](https://www.conventionalcommits.org).
 - The full read toolset verified against a real MCP client (not mocks) over the actual stdio protocol,
   including a fresh, independent agent exercising the auth, error-handling, and guard-rail behavior
   described in the server's `instructions`.
+
+## v0.2.0 (2026-07-23)
+
+### Feat
+
+- **read**: pagination and filters for list_jobs/list_projects
+- **execute**: nexus_submit_batch for multi-circuit jobs
+- **execute**: progress-reporting poll loop replaces SDK blocking wait
+- **results**: configurable top-N outcome truncation with metadata
+- **guards**: batch-aware, configurable submission rate limiter
+- **config**: add --max-outcomes and --max-submissions-per-minute
+- **sanitize**: broaden secret-value redaction to common token formats
+
+### Fix
+
+- **execute**: free-device estimates answer locally; explicit syntax checker
+- **server**: report the package version, not FastMCP's
+- **config**: strict flag parsing -- typos and --help no longer swallowed
+- **cli**: eager SDK import in the main thread to prevent Windows deadlock
+- **polling**: tolerate transient status failures during a wait
+- **execute**: estimate paths honor the target project and the rate limit
+- **execute**: divide the --max-credits ceiling across batch items
+- **guards**: actionable rejection for batches larger than the rate cap
+- **sanitize**: require a token boundary before prefixed secret shapes
+- **client**: download every result item, not only the first
+
+## v0.1.0 (2026-07-21)
+
+### Feat
+
+- **server**: add server-level instructions steering auth to the human
+- add manage and destructive toolsets
+- add execute toolset (compile/estimate/submit) with SpendGuard
+- add SpendGuard for server-side spend/hardware/confirm gating
+- build the FastMCP server with register-time omission
+- add NexusClient wrapper and read-only tools
+- add config, backend classification, redaction, and tool gating
+
+### Fix
+
+- **registry**: shorten description under the MCP Registry's 100-char limit
+- **client**: give unknown job-id lookups an actionable message
+- **guards**: report every missing spend/hardware flag at once
+- **server**: comprehensive instruction/description pass across all event paths
+- **client**: give malformed-QASM parse errors an actionable message
+- **client**: make nexus_list_devices JSON-safe (found via a real MCP client)
+- **guards**: refuse a missing cost estimate on billable devices
+- **security**: pre-publication audit hardening (round 3)
+- **security**: apply M2/M3 code-review findings
+- correct execute path against live Nexus; add live Bell smoke
+- **security**: harden M1 per code review
