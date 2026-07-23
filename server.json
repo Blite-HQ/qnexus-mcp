@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Blite-HQ/qnexus-mcp",
   "description": "MCP server for Quantinuum Nexus, wrapping the qnexus SDK. Not affiliated with Quantinuum.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "repository": {
     "url": "https://github.com/Blite-HQ/qnexus-mcp",
     "source": "github"
@@ -11,7 +11,7 @@
     {
       "registryType": "pypi",
       "identifier": "qnexus-mcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "transport": { "type": "stdio" },
       "runtimeHint": "uvx",
       "environmentVariables": [
@@ -38,6 +38,16 @@
         {
           "name": "QNEXUS_MCP_MAX_CREDITS",
           "description": "Hard per-call HQC ceiling; 0 blocks all spend (default: 0).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_MAX_OUTCOMES",
+          "description": "Top-N cap on distinct measurement outcomes returned per result item (default: 100).",
+          "isRequired": false
+        },
+        {
+          "name": "QNEXUS_MCP_MAX_SUBMISSIONS_PER_MINUTE",
+          "description": "Sliding-window submission cap; each circuit in a batch counts as one (default: 6).",
           "isRequired": false
         },
         {
