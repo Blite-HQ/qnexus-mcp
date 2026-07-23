@@ -48,12 +48,17 @@ async def nexus_estimate_cost(
     device: str = DEFAULT_DEVICE,
     project: str | None = None,
 ) -> dict[str, Any]:
-    """Estimate the HQC cost of running a QASM circuit (submits a free syntax-check job).
+    """Estimate the HQC cost of running a QASM circuit.
 
-    Defaults to the free H2-1LE emulator, which always estimates 0 HQC. The estimation job runs
-    inside `project` (default project when omitted) and counts against the submission rate limit.
+    Free devices (the H2-1LE default) answer 0 HQC instantly without contacting Nexus. Billable
+    devices submit a free syntax-check job inside `project` (default project when omitted),
+    which counts against the submission rate limit.
     """
     check_project_allowed(config_of(ctx), project)
+    if not is_billable(device):
+        # 0 HQC by definition (backends.FREE_DEVICES); enqueue nothing. Also sidesteps a live
+        # SDK bug: circuits.cost derives an invalid checker name for free-emulator devices.
+        return {"device": device, "n_shots": n_shots, "estimated_hqc": 0.0}
     rate_limiter_of(ctx).check()  # circuits.cost enqueues a real (free) syntax-check job
     cost = await call_sync(client_of(ctx).estimate_cost, circuit, n_shots, device, project=project)
     return {"device": device, "n_shots": n_shots, "estimated_hqc": cost}

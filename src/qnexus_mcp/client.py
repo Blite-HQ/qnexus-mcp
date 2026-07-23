@@ -20,7 +20,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from fastmcp.exceptions import ToolError
 
-from .backends import is_billable, is_hardware
+from .backends import is_billable, is_hardware, syntax_checker_for
 from .config import DEFAULT_PROJECT
 from .sanitize import redact
 
@@ -409,6 +409,17 @@ class QnexusClient:
         return circ_refs, project_ref
 
     @staticmethod
+    def _checker_or_raise(device: str) -> str:
+        """Resolve the family syntax checker, refusing device families the SDK can't estimate."""
+        checker = syntax_checker_for(device)
+        if not checker.startswith("H2-"):
+            raise ToolError(
+                f"Nexus cost estimation only supports H2-family devices; cannot estimate for "
+                f"{device}. Use an H2 device, or submit to the free H2-1LE emulator."
+            )
+        return checker
+
+    @staticmethod
     def _require_estimate(cost: Any, device: str) -> float:
         """Never let a missing estimate read as "0 HQC": the --max-credits gate and the user's
         confirmation would both be based on a fiction. Refuse instead."""
@@ -424,9 +435,12 @@ class QnexusClient:
         self, circuit: str, n_shots: int, device: str, project: str | None = None
     ) -> float:
         """Estimate within the TARGET project, so the --projects allowlist stays airtight."""
+        checker = self._checker_or_raise(device)
         qnx = _qnx()
         circ_ref, _ = self._upload(qnx, circuit, project)
-        cost = qnx.circuits.cost(circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device))
+        cost = qnx.circuits.cost(
+            circ_ref, n_shots, qnx.QuantinuumConfig(device_name=device), syntax_checker=checker
+        )
         return self._require_estimate(cost, device)
 
     @_mapped
@@ -434,9 +448,12 @@ class QnexusClient:
         self, circuits: list[str], n_shots: list[int], device: str, project: str | None = None
     ) -> float:
         """Aggregate HQC estimate for a batch (circuits.cost accepts lists, returns one total)."""
+        checker = self._checker_or_raise(device)
         qnx = _qnx()
         circ_refs, _ = self._upload_many(qnx, circuits, project)
-        cost = qnx.circuits.cost(circ_refs, n_shots, qnx.QuantinuumConfig(device_name=device))
+        cost = qnx.circuits.cost(
+            circ_refs, n_shots, qnx.QuantinuumConfig(device_name=device), syntax_checker=checker
+        )
         return self._require_estimate(cost, device)
 
     @_mapped

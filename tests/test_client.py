@@ -234,8 +234,8 @@ class _RecordingBatchQnx:
 
     @property
     def circuits(self):
-        def cost(refs, n_shots, config):
-            self.cost_calls.append((refs, n_shots, config.device_name))
+        def cost(refs, n_shots, config, syntax_checker=None):
+            self.cost_calls.append((refs, n_shots, config.device_name, syntax_checker))
             return self._cost
 
         return types.SimpleNamespace(
@@ -282,8 +282,27 @@ def test_estimate_cost_batch_returns_aggregate_float(monkeypatch):
     monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
     cost = QnexusClient().estimate_cost_batch([_VALID_QASM, _VALID_QASM], [10, 10], "H2-1E")
     assert cost == 7.5
-    (refs, n_shots, device) = qnx.cost_calls[0]
+    (refs, n_shots, device, _checker) = qnx.cost_calls[0]
     assert len(refs) == 2 and n_shots == [10, 10] and device == "H2-1E"
+
+
+def test_estimate_cost_passes_explicit_syntax_checker(monkeypatch):
+    # Found live: without an explicit checker, the SDK derives an invalid name ("H2-1LESC")
+    # because its strip("E") result is discarded. Both estimate paths must pass it.
+    qnx = _RecordingBatchQnx(cost=1.0)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    QnexusClient().estimate_cost(_VALID_QASM, 10, "H2-1E")
+    QnexusClient().estimate_cost_batch([_VALID_QASM], [10], "H2-1E")
+    assert [call[3] for call in qnx.cost_calls] == ["H2-1SC", "H2-1SC"]
+
+
+def test_estimate_cost_refuses_non_h2_family_with_actionable_error(monkeypatch):
+    # The SDK only supports H2-x cost estimation; surface that as guidance, not a masked error.
+    qnx = _RecordingBatchQnx(cost=1.0)
+    monkeypatch.setattr("qnexus_mcp.client._qnx", lambda: qnx)
+    with pytest.raises(ToolError, match="H2"):
+        QnexusClient().estimate_cost(_VALID_QASM, 10, "H1-1")
+    assert qnx.cost_calls == []  # refused before enqueuing anything
 
 
 def test_estimate_cost_uploads_into_the_target_project(monkeypatch):

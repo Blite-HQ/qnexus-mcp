@@ -85,13 +85,35 @@ def test_execute_specs_shape():
 # --- estimate: project targeting + rate limiting (review findings M2/M5) ----------------------
 
 
-async def test_estimate_cost_counts_against_rate_limit(fake_client):
+async def test_estimate_cost_free_device_answers_without_touching_nexus(fake_client, make_ctx):
+    # Found live (Windows E2E): estimating on the free default device hit the SDK's broken
+    # checker-name derivation ("H2-1LESC" invalid). Free devices are 0 HQC by definition --
+    # answer locally, enqueue nothing.
+    class NoEstimateClient:
+        def __getattr__(self, item):
+            return getattr(fake_client, item)
+
+        def estimate_cost(self, circuit, n_shots, device, project=None):
+            raise AssertionError("free-device estimate must not reach the client/SDK")
+
+    out = await nexus_estimate_cost(make_ctx(NoEstimateClient()), circuit="x")
+    assert out == {"device": "H2-1LE", "n_shots": 100, "estimated_hqc": 0.0}
+
+
+async def test_estimate_cost_free_device_consumes_no_rate_limit_slot(fake_client):
+    cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), max_submissions_per_minute=1)
+    ctx = _ctx(fake_client, cfg)
+    await nexus_estimate_cost(ctx, circuit="x")  # free: no job enqueued, no slot
+    await nexus_estimate_cost(ctx, circuit="x")  # still under the 1/min cap
+
+
+async def test_estimate_cost_billable_counts_against_rate_limit(fake_client):
     # circuits.cost enqueues a real (free) syntax-check job, so it is submission pressure too.
     cfg = ServerConfig(toolsets=frozenset({"read", "execute"}), max_submissions_per_minute=1)
     ctx = _ctx(fake_client, cfg)
-    await nexus_estimate_cost(ctx, circuit="x")
+    await nexus_estimate_cost(ctx, circuit="x", device="H2-1E")
     with pytest.raises(RateLimited):
-        await nexus_estimate_cost(ctx, circuit="x")
+        await nexus_estimate_cost(ctx, circuit="x", device="H2-1E")
 
 
 async def test_estimate_cost_checks_allowlist_against_its_target_project(fake_client):

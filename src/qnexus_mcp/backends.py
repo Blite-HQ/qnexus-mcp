@@ -23,3 +23,20 @@ def is_hardware(device_name: str) -> bool:
     # Real QPUs are billable and not emulators (no trailing 'E'). Unknown billable names default to
     # hardware, so they require --allow-hardware (the more restrictive gate).
     return is_billable(device_name) and not device_name.upper().endswith("E")
+
+
+def syntax_checker_for(device_name: str) -> str:
+    """Map a device to its family's syntax-checker device (H2-1 / H2-1E / H2-1LE -> H2-1SC).
+
+    Always pass this explicitly to qnx.circuits.cost: qnexus 0.46 derives the checker itself with
+    a `str.strip("E")` whose result is discarded, yielding invalid names like "H2-1LESC" (found
+    live: cost estimation failed for every non-SC device name).
+    """
+    base = device_name.upper()
+    if base.endswith("SC"):
+        return base
+    if base.endswith("LE"):
+        base = base[:-2]
+    elif base.endswith("E"):
+        base = base[:-1]
+    return base + "SC"
