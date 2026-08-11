@@ -13,7 +13,7 @@ keywords = ["mcp", "model-context-protocol", "quantinuum", "nexus", "qnexus", "q
 # deliberately (Dependabot opens the PR; CI + the live smoke validate it).
 dependencies = [
     "fastmcp>=3.4,<4",
-    "qnexus>=0.46,<0.47",
+    "qnexus>=0.46,<0.49",
     "pydantic>=2",
     "pytket>=2,<3",  # direct import (pytket.qasm) in the execute/manage paths
     "anyio>=4",  # direct import (thread offload for blocking SDK calls)

@@ -2281,7 +2281,7 @@ wheels = [
 
 [[package]]
 name = "qnexus"
-version = "0.46.0"
+version = "0.48.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2298,14 +2298,14 @@ dependencies = [
     { name = "rich" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/62/45f8ff878361ce84117fd23e475c3e52db346fba283ad197d653f49ce9ef/qnexus-0.46.0.tar.gz", hash = "sha256:2f679ecefb8d64c3090464501f3cb7633eb31250fe3af7a7220d2955fb19bbfc", size = 328226, upload-time = "2026-06-30T14:36:04.013Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/ac/cfc9a7cbd953e81575326b1a20014b0812170b272b24f9e285b2e08243a5/qnexus-0.48.0.tar.gz", hash = "sha256:baa33a80e6001aa0c96b3c0d44f28dfdb77c97550ad6801c9dd4e3119d597eb8", size = 335550, upload-time = "2026-08-07T10:43:07.1Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/d7/e60a575fbfa39373e769b4e888de14fd928c67f01a2c8154175fa8da357d/qnexus-0.46.0-py3-none-any.whl", hash = "sha256:4918c0edcbd2269ddab6bd31c7f0905a93a4c79dd380f69f281c774a1c544c0b", size = 81681, upload-time = "2026-06-30T14:36:02.931Z" },
+    { url = "https://files.pythonhosted.org/packages/17/38/1bb7c3400cfd9d7b48f094a92be448b0f0817493762ab41408a8360d6a97/qnexus-0.48.0-py3-none-any.whl", hash = "sha256:e7d650036e2826ecdc376039b92e9e3eeb5b7577f59765797db9d9cf4e8ae7e4", size = 82386, upload-time = "2026-08-07T10:43:05.839Z" },
 ]
 
 [[package]]
 name = "qnexus-mcp"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -2331,7 +2331,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=3.4,<4" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pytket", specifier = ">=2,<3" },
-    { name = "qnexus", specifier = ">=0.46,<0.47" },
+    { name = "qnexus", specifier = ">=0.46,<0.49" },
 ]
 
 [package.metadata.requires-dev]
